@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import YouTube, { YouTubeProps } from 'react-youtube';
+import { usePlayer } from '../context/PlayerContext';
 
 interface YouTubePlayerProps {
   videoId: string | null | undefined;
@@ -27,6 +28,58 @@ export default function YouTubePlayer({
 }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null);
   const [isReady, setIsReady] = useState(false);
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const { setProgress, seekTarget } = usePlayer();
+
+  // Progress Interval
+  useEffect(() => {
+    let interval: any;
+    if (isReady && isPlaying && playerRef.current) {
+      interval = setInterval(() => {
+        try {
+          const current = playerRef.current.getCurrentTime();
+          const total = playerRef.current.getDuration();
+          if (typeof current === 'number' && typeof total === 'number') {
+            setProgress(current, total);
+          }
+        } catch (e) {}
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isReady, isPlaying, setProgress]);
+
+  // Handle seeking
+  useEffect(() => {
+    if (isReady && playerRef.current && seekTarget !== null) {
+      try {
+        playerRef.current.seekTo(seekTarget, true);
+      } catch (e) {}
+    }
+  }, [seekTarget, isReady]);
+
+  // Update active video ID when prop changes
+  useEffect(() => {
+    if (videoId && isReady && playerRef.current) {
+      const currentVideoId = playerRef.current.getVideoData?.()?.video_id;
+      if (currentVideoId && currentVideoId !== videoId) {
+        console.log('LOADING NEW VIDEO ID:', videoId);
+        try {
+          // Use loadVideoById to update the existing iframe instead of remounting
+          playerRef.current.loadVideoById(videoId);
+          setActiveVideoId(videoId);
+          if (!isPlaying) {
+             // If we loaded it but we shouldn't be playing yet
+             // Note: loadVideoById starts playing immediately.
+             // We might need cueVideoById if isPlaying is false.
+          }
+        } catch (e) {
+          console.warn('Manual load error:', e);
+        }
+      }
+    } else if (videoId) {
+      setActiveVideoId(videoId);
+    }
+  }, [videoId, isReady, isPlaying]);
 
   // Stop video on unmount
   useEffect(() => {
@@ -93,9 +146,13 @@ export default function YouTubePlayer({
 
   const onPlayerStateChange: YouTubeProps['onStateChange'] = useCallback((event: any) => {
     if (!event.target) return;
-
+    
+    // Ignore events if the videoId has changed but this event is from the previous one
+    // Note: react-youtube doesn't easily expose the current video ID in the event target
+    // but we can try to be defensive.
+    
     if (event.data === PLAYER_STATES.PLAYING) {
-      console.log('VIDEO PLAYING');
+      console.log('VIDEO PLAYING:', videoId);
       try {
         event.target.unMute();
         event.target.setVolume(volume * 100);
@@ -103,15 +160,21 @@ export default function YouTubePlayer({
     }
     
     if (event.data === PLAYER_STATES.ENDED) {
-      console.log('VIDEO ENDED');
+      console.log('VIDEO ENDED:', videoId);
       onTrackEnd?.();
     }
-  }, [onTrackEnd, volume]);
+  }, [onTrackEnd, volume, videoId]);
 
   const onPlayerError: YouTubeProps['onError'] = useCallback((event: any) => {
     console.error('YouTube Player Error:', event.data);
-    onError?.(event.data);
-  }, [onError]);
+    // Explicitly check for blocked videos in player component too
+    if ([101, 150].includes(event.data)) {
+      console.warn('Track restricted, skipping from player...');
+      onTrackEnd?.(); // Trigger skip
+    } else {
+      onError?.(event.data);
+    }
+  }, [onError, onTrackEnd]);
 
   const opts = React.useMemo<YouTubeProps['opts']>(() => ({
     height: '64',
