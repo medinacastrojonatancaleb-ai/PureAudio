@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "Like": {
+      "title": "Like",
+      "description": "Represents a user liking a track",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The ID of the user who liked the track" },
+        "trackId": { "type": "string", "description": "The YouTube video ID" },
+        "trackTitle": { "type": "string", "description": "The title of the track" },
+        "trackArtist": { "type": "string", "description": "The artist of the track" },
+        "trackThumbnail": { "type": "string", "description": "The thumbnail of the track" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the like was created" }
+      },
+      "required": ["userId", "trackId", "createdAt"]
+    },
+    "TrackStats": {
+      "title": "TrackStats",
+      "description": "Aggregated statistics for a track",
+      "type": "object",
+      "properties": {
+        "likeCount": { "type": "integer", "description": "Total number of likes" }
+      },
+      "required": ["likeCount"]
+    }
+  },
+  "firestore": {
+    "/likes/{likeId}": {
+      "schema": "Like",
+      "description": "Collection of user likes"
+    },
+    "/trackStats/{trackId}": {
+      "schema": "TrackStats",
+      "description": "Counters for track interactions"
+    }
+  }
+}

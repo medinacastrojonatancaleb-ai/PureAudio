@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Likes Collection ---
+    match /likes/{likeId} {
+      function isValidLike(data) {
+        return data.keys().hasAll(['userId', 'trackId', 'trackTitle', 'trackArtist', 'trackThumbnail', 'createdAt'])
+          && data.keys().size() == 6
+          && data.userId == request.auth.uid
+          && data.trackId is string
+          && data.trackId.size() <= 128
+          && data.createdAt == request.time;
+      }
+
+      // Users can see their own likes and create new ones
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidLike(incoming());
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // --- Track Stats ---
+    match /trackStats/{trackId} {
+      function isValidStats(data) {
+        return data.keys().hasAll(['likeCount'])
+          && data.keys().size() == 1
+          && data.likeCount is int;
+      }
+
+      allow get: if isValidId(trackId);
+      allow list: if true;
+      allow create: if isSignedIn() && isValidStats(incoming());
+      allow update: if isSignedIn() && isValidStats(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['likeCount']);
+    }
+  }
+}
