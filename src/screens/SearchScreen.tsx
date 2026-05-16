@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, X, Mic, Music, User, Disc, Play, Heart, MoreVertical } from 'lucide-react';
+import { Search, X, Mic, Music, User, Disc, Play, Heart, MoreVertical, UserPlus, UserCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { youtubeService, YouTubeTrack } from '../services/youtubeService';
 import { usePlayer } from '../context/PlayerContext';
@@ -17,7 +17,14 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<YouTubeTrack[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const { playTrack, currentTrack, toggleLike, likedTracks, getLikeCount } = usePlayer();
+  const { 
+    playTrack, 
+    currentTrack, 
+    toggleLike, 
+    likedTracks, 
+    followedArtists, 
+    toggleFollowArtist 
+  } = usePlayer();
   const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
 
   const handleSearch = async (term: string) => {
@@ -82,6 +89,7 @@ export default function SearchScreen() {
           >
             {results.map((track) => {
               const isLiked = likedTracks.some(t => t.id === track.id);
+              const isFollowing = followedArtists.some(a => a.name === track.artist);
               return (
                 <motion.div 
                   whileTap={{ scale: 0.98 }}
@@ -96,8 +104,24 @@ export default function SearchScreen() {
                     </div>
                   </div>
                   <div className="flex-1 overflow-hidden">
-                    <h3 className="font-bold text-sm truncate leading-tight">{track.title}</h3>
-                    <p className="text-xs text-gray-400 truncate mt-0.5">{track.artist}</p>
+                    <h3 className="font-bold text-sm truncate leading-tight group-hover:text-primary transition-colors">{track.title}</h3>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-xs text-gray-400 truncate max-w-[120px]">{track.artist}</p>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFollowArtist({
+                            id: '',
+                            name: track.artist,
+                            thumbnail: track.thumbnail // Use track thumbnail as artist thumbnail fallback
+                          });
+                        }}
+                        className={`text-[10px] font-black uppercase px-2 py-0.5 rounded transition-all flex items-center gap-1 ${isFollowing ? 'bg-primary/20 text-primary' : 'bg-white/10 text-gray-400 hover:bg-white/20 hover:text-white opacity-0 group-hover:opacity-100'}`}
+                      >
+                        {isFollowing ? <UserCheck size={10} /> : <UserPlus size={10} />}
+                        {isFollowing ? 'Following' : 'Follow'}
+                      </button>
+                    </div>
                   </div>
                   <button 
                     onClick={(e) => { e.stopPropagation(); toggleLike(track); }}

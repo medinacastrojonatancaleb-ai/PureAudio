@@ -55,5 +55,20 @@ service cloud.firestore {
       allow update: if isSignedIn() && isValidStats(incoming())
         && incoming().diff(existing()).affectedKeys().hasOnly(['likeCount']);
     }
+
+    // --- Artist Follows ---
+    match /artistFollows/{followId} {
+      function isValidFollow(data) {
+        return data.keys().hasAll(['userId', 'artistName', 'createdAt'])
+          && data.userId == request.auth.uid
+          && data.artistName is string
+          && data.createdAt == request.time;
+      }
+
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidFollow(incoming());
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
   }
 }

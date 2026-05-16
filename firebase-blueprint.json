@@ -22,6 +22,19 @@
         "likeCount": { "type": "integer", "description": "Total number of likes" }
       },
       "required": ["likeCount"]
+    },
+    "ArtistFollow": {
+      "title": "ArtistFollow",
+      "description": "Represents a user following an artist",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The ID of the user" },
+        "artistId": { "type": "string", "description": "The YouTube channel ID (if available)" },
+        "artistName": { "type": "string", "description": "The name of the artist" },
+        "artistThumbnail": { "type": "string", "description": "The thumbnail of the artist" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the follow was created" }
+      },
+      "required": ["userId", "artistName", "createdAt"]
     }
   },
   "firestore": {
@@ -32,6 +45,10 @@
     "/trackStats/{trackId}": {
       "schema": "TrackStats",
       "description": "Counters for track interactions"
+    },
+    "/artistFollows/{followId}": {
+      "schema": "ArtistFollow",
+      "description": "Collection of artist follows"
     }
   }
 }

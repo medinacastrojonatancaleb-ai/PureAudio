@@ -50,6 +50,12 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+interface Artist {
+  id: string; // channelId or similar
+  name: string;
+  thumbnail: string;
+}
+
 interface PlayerContextType {
   currentTrack: YouTubeTrack | null;
   isPlaying: boolean;
@@ -64,47 +70,46 @@ interface PlayerContextType {
   setProgress: (current: number, total: number) => void;
   seekTo: (time: number) => void;
   seekTarget: number | null;
+  isShuffle: boolean;
+  toggleShuffle: () => void;
+  repeatMode: 'none' | 'all' | 'one';
+  toggleRepeat: () => void;
   user: User | null;
   likedTracks: YouTubeTrack[];
   toggleLike: (track: YouTubeTrack) => Promise<void>;
   getLikeCount: (trackId: string) => number;
   login: () => Promise<void>;
   logout: () => Promise<void>;
-  shuffleMode: boolean;
-  setShuffleMode: (v: boolean) => void;
-  repeatMode: 'off' | 'track' | 'queue';
-  setRepeatMode: (v: 'off' | 'track' | 'queue') => void;
   queue: YouTubeTrack[];
+  followedArtists: Artist[];
+  toggleFollowArtist: (artist: Artist) => Promise<void>;
+  notification: {message: string, type: 'success' | 'info'} | null;
+  notify: (message: string, type?: 'success' | 'info') => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const [currentTrack, setCurrentTrack] = useState<YouTubeTrack | null>(() => {
-    const saved = localStorage.getItem('pureaudio_current_track');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [queue, setQueue] = useState<YouTubeTrack[]>(() => {
-    const saved = localStorage.getItem('pureaudio_queue');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [shuffledQueue, setShuffledQueue] = useState<YouTubeTrack[]>([]);
+  const [currentTrack, setCurrentTrack] = useState<YouTubeTrack | null>(null);
+  const [queue, setQueue] = useState<YouTubeTrack[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(() => {
     const saved = localStorage.getItem('pureaudio_volume');
     return saved ? parseFloat(saved) : 0.8;
   });
-  const [shuffleMode, setShuffleMode] = useState(() => {
-    return localStorage.getItem('pureaudio_shuffle') === 'true';
-  });
-  const [repeatMode, setRepeatMode] = useState<'off' | 'track' | 'queue'>(() => {
-    return (localStorage.getItem('pureaudio_repeat') as any) || 'off';
-  });
-
   const [user, setUser] = useState<User | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [seekTarget, setSeekTarget] = useState<number | null>(null);
+  const [isShuffle, setIsShuffle] = useState(false);
+  const [repeatMode, setRepeatMode] = useState<'none' | 'all' | 'one'>('none');
+  const [followedArtists, setFollowedArtists] = useState<Artist[]>([]);
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
+
+  const notify = useCallback((message: string, type: 'success' | 'info' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  }, []);
 
   const setProgress = useCallback((current: number, total: number) => {
     setCurrentTime(current);
@@ -118,36 +123,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [likedTracks, setLikedTracks] = useState<YouTubeTrack[]>([]);
   const [trackStats, setTrackStats] = useState<Record<string, number>>({});
 
-  // Sync state to localStorage
+  // Sync volume to localStorage
   useEffect(() => {
     localStorage.setItem('pureaudio_volume', volume.toString());
   }, [volume]);
-
-  useEffect(() => {
-    localStorage.setItem('pureaudio_shuffle', shuffleMode.toString());
-    if (shuffleMode && queue.length > 0) {
-      const shuffled = [...queue].sort(() => Math.random() - 0.5);
-      setShuffledQueue(shuffled);
-    } else {
-      setShuffledQueue([]);
-    }
-  }, [shuffleMode, queue]);
-
-  useEffect(() => {
-    localStorage.setItem('pureaudio_repeat', repeatMode);
-  }, [repeatMode]);
-
-  useEffect(() => {
-    if (currentTrack) {
-      localStorage.setItem('pureaudio_current_track', JSON.stringify(currentTrack));
-    }
-  }, [currentTrack]);
-
-  useEffect(() => {
-    localStorage.setItem('pureaudio_queue', JSON.stringify(queue));
-  }, [queue]);
-
-  const activeQueue = shuffleMode && shuffledQueue.length > 0 ? shuffledQueue : queue;
 
   // Auth Listener
   useEffect(() => {
@@ -177,6 +156,26 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     });
   }, [user]);
 
+  // Artist Follows Listener
+  useEffect(() => {
+    if (!user) {
+      setFollowedArtists([]);
+      return;
+    }
+
+    const q = query(collection(db, 'artistFollows'), where('userId', '==', user.uid));
+    return onSnapshot(q, (snapshot) => {
+      const artists = snapshot.docs.map(doc => ({
+        id: doc.data().artistId,
+        name: doc.data().artistName,
+        thumbnail: doc.data().artistThumbnail
+      }));
+      setFollowedArtists(artists);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'artistFollows');
+    });
+  }, [user]);
+
   // Track Stats Listener (Global for counting likes)
   useEffect(() => {
     return onSnapshot(collection(db, 'trackStats'), (snapshot) => {
@@ -196,71 +195,67 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setIsPlaying(true);
     setCurrentTime(0);
     setSeekTarget(null);
-    
     if (playlist) {
       setQueue(playlist);
+    } else if (likedTracks.some(t => t.id === track.id)) {
+      setQueue(likedTracks);
     } else {
-      // If no playlist provided, check if track is in current queue
-      const inQueue = queue.some(t => t.id === track.id);
-      if (!inQueue) {
-        setQueue([track]);
-      }
+      setQueue([track]);
     }
-  }, [queue]);
+  }, [likedTracks]);
 
   const nextTrack = useCallback(() => {
-    if (repeatMode === 'track' && currentTrack) {
-      // Small trick to re-trigger currentTrack change if needed 
-      // though usually YouTube player handles loop if we tell it.
-      // But for simplicity, just re-play same track.
-      console.log('Repeating track');
-      setCurrentTime(0);
-      setSeekTarget(0); 
+    if (!currentTrack || queue.length === 0) return;
+    
+    if (repeatMode === 'one') {
+      seekTo(0);
       return;
     }
 
-    if (!currentTrack || activeQueue.length === 0) return;
-    const currentIndex = activeQueue.findIndex(t => t.id === currentTrack.id);
-    
-    if (currentIndex !== -1) {
-      let nextIndex = currentIndex + 1;
-      
-      if (nextIndex >= activeQueue.length) {
-        if (repeatMode === 'queue') {
-          nextIndex = 0;
-        } else {
-          setIsPlaying(false);
-          return;
-        }
-      }
+    const currentIndex = queue.findIndex(t => t.id === currentTrack.id);
+    let nextIndex;
 
-      const next = activeQueue[nextIndex];
-      if (next) {
-        console.log('Skipping to next track:', next.title);
-        setCurrentTrack(next);
-        setIsPlaying(true);
-        setCurrentTime(0);
-        setSeekTarget(null);
+    if (isShuffle) {
+      // Pick a random index that isn't the current one if possible
+      if (queue.length > 1) {
+        do {
+          nextIndex = Math.floor(Math.random() * queue.length);
+        } while (nextIndex === currentIndex);
+      } else {
+        nextIndex = 0;
+      }
+    } else {
+      nextIndex = (currentIndex + 1) % queue.length;
+      // If we reached the end and repeat is none, stop playing
+      if (nextIndex === 0 && repeatMode === 'none' && currentIndex !== -1) {
+        setIsPlaying(false);
+        return;
       }
     }
-  }, [currentTrack, activeQueue, repeatMode]);
+
+    const next = queue[nextIndex];
+    if (next) {
+      console.log('Skipping to next track:', next.title);
+      setCurrentTrack(next);
+      setIsPlaying(true);
+      setCurrentTime(0);
+      setSeekTarget(null);
+    }
+  }, [currentTrack, queue, isShuffle, repeatMode, seekTo]);
 
   const prevTrack = useCallback(() => {
-    if (!currentTrack || activeQueue.length === 0) return;
-    const currentIndex = activeQueue.findIndex(t => t.id === currentTrack.id);
+    if (!currentTrack || queue.length === 0) return;
     
-    if (currentIndex !== -1) {
-      let prevIndex = currentIndex - 1;
-      
-      if (prevIndex < 0) {
-        if (repeatMode === 'queue') {
-          prevIndex = activeQueue.length - 1;
-        } else {
-          prevIndex = 0;
-        }
-      }
+    // If we're more than 3 seconds in, restart the song instead of going back
+    if (currentTime > 3) {
+      seekTo(0);
+      return;
+    }
 
-      const prev = activeQueue[prevIndex];
+    const currentIndex = queue.findIndex(t => t.id === currentTrack.id);
+    if (currentIndex !== -1) {
+      const prevIndex = (currentIndex - 1 + queue.length) % queue.length;
+      const prev = queue[prevIndex];
       if (prev) {
         setCurrentTrack(prev);
         setIsPlaying(true);
@@ -268,7 +263,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setSeekTarget(null);
       }
     }
-  }, [currentTrack, activeQueue, repeatMode]);
+  }, [currentTrack, queue, currentTime, seekTo]);
+
+  const toggleShuffle = useCallback(() => {
+    setIsShuffle(prev => !prev);
+  }, []);
+
+  const toggleRepeat = useCallback(() => {
+    setRepeatMode(prev => {
+      if (prev === 'none') return 'all';
+      if (prev === 'all') return 'one';
+      return 'none';
+    });
+  }, []);
 
   const togglePlay = useCallback(() => {
     setIsPlaying(prev => !prev);
@@ -314,6 +321,34 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return trackStats[trackId] || 0;
   };
 
+  const toggleFollowArtist = async (artist: Artist) => {
+    if (!user) {
+      await login();
+      return;
+    }
+
+    const isFollowing = followedArtists.some(a => a.name === artist.name);
+    const followId = `${user.uid}_${artist.name.replace(/\s+/g, '_')}`;
+
+    try {
+      if (isFollowing) {
+        await deleteDoc(doc(db, 'artistFollows', followId));
+        notify(`Has dejado de seguir a ${artist.name}`, 'info');
+      } else {
+        await setDoc(doc(db, 'artistFollows', followId), {
+          userId: user.uid,
+          artistId: artist.id || '',
+          artistName: artist.name,
+          artistThumbnail: artist.thumbnail || '',
+          createdAt: serverTimestamp()
+        });
+        notify(`Album virtual de ${artist.name} añadido a tu biblioteca`, 'success');
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `artistFollows/${followId}`);
+    }
+  };
+
   const login = async () => {
     await signInWithGoogle();
   };
@@ -337,6 +372,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setProgress,
       seekTo,
       seekTarget,
+      isShuffle,
+      toggleShuffle,
+      repeatMode,
+      toggleRepeat,
       user,
       likedTracks,
       toggleLike,
@@ -344,10 +383,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       login,
       logout,
       queue,
-      shuffleMode,
-      setShuffleMode,
-      repeatMode,
-      setRepeatMode
+      followedArtists,
+      toggleFollowArtist,
+      notification,
+      notify
     }}>
       {children}
     </PlayerContext.Provider>

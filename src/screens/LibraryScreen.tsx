@@ -1,13 +1,38 @@
-import React from 'react';
-import { Heart, ListMusic, Download, Clock, ChevronRight, Settings, Trash2, Play } from 'lucide-react';
+import React, { useState } from 'react';
+import { Heart, ListMusic, UserPlus, UserCheck, Settings, Trash2, Play, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import { usePlayer } from '../context/PlayerContext';
+import { youtubeService } from '../services/youtubeService';
 
 export default function LibraryScreen() {
-  const { likedTracks, playTrack, toggleLike, user, login } = usePlayer();
+  const { 
+    likedTracks, 
+    playTrack, 
+    toggleLike, 
+    user, 
+    login, 
+    followedArtists, 
+    toggleFollowArtist 
+  } = usePlayer();
+  const [loadingArtist, setLoadingArtist] = useState<string | null>(null);
+
+  const playArtistTracks = async (artistName: string) => {
+    setLoadingArtist(artistName);
+    try {
+      const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
+      const tracks = await youtubeService.getPlayableTracks(artistName, apiKey);
+      if (tracks.length > 0) {
+        playTrack(tracks[0], tracks);
+      }
+    } catch (error) {
+      console.error('Failed to play artist tracks:', error);
+    } finally {
+      setLoadingArtist(null);
+    }
+  };
 
   return (
-    <div className="space-y-8 pb-20">
+    <div className="space-y-12 pb-20">
       <header className="flex items-center justify-between">
         <h2 className="text-2xl font-black tracking-tight">Your Library</h2>
         <div className="flex gap-2">
@@ -39,6 +64,63 @@ export default function LibraryScreen() {
           >
             Log in
           </button>
+        )}
+      </section>
+
+      {/* Followed Artists Section */}
+      <section className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Users className="text-primary" size={24} />
+            <h2 className="text-xl font-black tracking-tight">Followed Artists</h2>
+          </div>
+          <span className="text-xs font-bold text-gray-500 uppercase">
+            {followedArtists.length} followed
+          </span>
+        </div>
+
+        {followedArtists.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 gap-y-10">
+            {followedArtists.map((artist) => (
+               <motion.div 
+                key={artist.name}
+                whileHover={{ y: -8 }}
+                className="group cursor-pointer flex flex-col items-center"
+                onClick={() => playArtistTracks(artist.name)}
+               >
+                 <div className="w-full aspect-square rounded-full overflow-hidden mb-4 relative shadow-[0_8px_24px_rgba(0,0,0,0.5)] ring-1 ring-white/10 group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.7)] group-hover:ring-primary/50 transition-all duration-300">
+                    <img src={artist.thumbnail} alt={artist.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                      <div className="w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                        {loadingArtist === artist.name ? (
+                          <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Play size={28} fill="black" className="text-black ml-1" />
+                        )}
+                      </div>
+                    </div>
+                 </div>
+                 <div className="text-center w-full">
+                    <p className="font-bold text-base truncate group-hover:text-primary transition-colors">{artist.name}</p>
+                    <p className="text-xs text-gray-500 font-medium mt-1">Artist Album</p>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); toggleFollowArtist(artist); }}
+                      className="mt-3 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] uppercase font-black text-gray-500 hover:text-white"
+                    >
+                      Unfollow
+                    </button>
+                 </div>
+               </motion.div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col items-center gap-4 text-center">
+            <Users className="text-white/10" size={40} />
+            <div>
+              <p className="font-bold text-white">Find artists to follow</p>
+              <p className="text-sm text-gray-500">Your favorite artists will appear here</p>
+            </div>
+          </div>
         )}
       </section>
 

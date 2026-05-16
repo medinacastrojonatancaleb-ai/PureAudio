@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Music2 } from 'lucide-react';
+import { Play, Music2, UserPlus, UserCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { usePlayer } from '../context/PlayerContext';
 import { youtubeService, YouTubeTrack } from '../services/youtubeService';
 
 export default function HomeScreen() {
-  const { playTrack, currentTrack } = usePlayer();
+  const { playTrack, currentTrack, followedArtists, toggleFollowArtist } = usePlayer();
   const [sections, setSections] = useState<{
     greeting: YouTubeTrack[];
     trending: YouTubeTrack[];
@@ -144,7 +144,27 @@ export default function HomeScreen() {
                 </div>
                 <div className="space-y-1">
                   <h3 className={`font-bold text-sm truncate leading-tight ${currentTrack?.id === song.id ? 'text-primary' : ''}`}>{song.title}</h3>
-                  <p className="text-xs text-gray-500 font-medium truncate">{song.artist}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-500 font-medium truncate flex-1">{song.artist}</p>
+                    {(() => {
+                      const isFollowing = followedArtists.some(a => a.name === song.artist);
+                      return (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFollowArtist({
+                              id: '',
+                              name: song.artist,
+                              thumbnail: song.thumbnail
+                            });
+                          }}
+                          className={`flex items-center gap-1 text-[10px] uppercase font-black transition-colors ${isFollowing ? 'text-primary' : 'text-gray-600 hover:text-white'}`}
+                        >
+                          {isFollowing ? <UserCheck size={12} /> : <UserPlus size={12} />}
+                        </button>
+                      );
+                    })()}
+                  </div>
                 </div>
               </motion.div>
             ))}

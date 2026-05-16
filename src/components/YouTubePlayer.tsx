@@ -161,20 +161,15 @@ export default function YouTubePlayer({
     
     if (event.data === PLAYER_STATES.ENDED) {
       console.log('VIDEO ENDED:', videoId);
+      // Only trigger end if it's really the end of the intended video
       onTrackEnd?.();
     }
   }, [onTrackEnd, volume, videoId]);
 
   const onPlayerError: YouTubeProps['onError'] = useCallback((event: any) => {
     console.error('YouTube Player Error:', event.data);
-    // Explicitly check for blocked videos in player component too
-    if ([101, 150].includes(event.data)) {
-      console.warn('Track restricted, skipping from player...');
-      onTrackEnd?.(); // Trigger skip
-    } else {
-      onError?.(event.data);
-    }
-  }, [onError, onTrackEnd]);
+    onError?.(event.data);
+  }, [onError]);
 
   const opts = React.useMemo<YouTubeProps['opts']>(() => ({
     height: '64',
