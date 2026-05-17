@@ -24,6 +24,18 @@ export async function createServer() {
 
   app.use(express.json());
 
+  // Simple CORS
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+  });
+
+  // Health check
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", env: process.env.NODE_ENV });
+  });
+
   // AI Recommendation Endpoint
   app.post("/api/ai/mood", async (req, res) => {
     const { prompt, age } = req.body;
@@ -206,8 +218,13 @@ if (process.env.NODE_ENV !== 'production' || (!process.env.VERCEL && !process.en
   });
 }
 
+// Cache for serverless execution
+let appInstance: any = null;
+
 // Export a handler for Vercel
 export default async (req: any, res: any) => {
-  const app = await createServer();
-  return app(req, res);
+  if (!appInstance) {
+    appInstance = await createServer();
+  }
+  return appInstance(req, res);
 };
