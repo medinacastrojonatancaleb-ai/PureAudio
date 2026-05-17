@@ -48,15 +48,13 @@ export default function YouTubePlayer({
           if (currentVideoData && currentVideoData.video_id !== activeVideoId.current) {
             return;
           }
- 
+
           const current = playerRef.current.getCurrentTime();
           const total = playerRef.current.getDuration();
           if (typeof current === 'number' && typeof total === 'number') {
             setProgress(current, total);
           }
-        } catch (e) {
-          // Ignore transient errors
-        }
+        } catch (e) {}
       }, 1000);
     }
     return () => clearInterval(interval);
@@ -70,9 +68,7 @@ export default function YouTubePlayer({
         if (currentVideoData && currentVideoData.video_id === activeVideoId.current) {
           playerRef.current.seekTo(seekTarget, true);
         }
-      } catch (e) {
-        // Ignore seek errors
-      }
+      } catch (e) {}
     }
   }, [seekTarget, isReady]);
 
@@ -82,9 +78,7 @@ export default function YouTubePlayer({
       if (playerRef.current) {
         try {
           playerRef.current.stopVideo?.();
-        } catch (e) {
-          // Ignore cleanup errors
-        }
+        } catch (e) {}
       }
     };
   }, []);
@@ -94,9 +88,7 @@ export default function YouTubePlayer({
     if (isReady && playerRef.current) {
       try {
         playerRef.current.setVolume(volume * 100);
-      } catch (e) {
-        // Ignore volume sync errors
-      }
+      } catch (e) {}
     }
   }, [volume, isReady]);
 
@@ -114,9 +106,7 @@ export default function YouTubePlayer({
           playerRef.current.pauseVideo();
         }
       }
-    } catch (e) {
-      // Ignore control errors
-    }
+    } catch (e) {}
   }, [isPlaying, isReady, videoId]);
 
   const onPlayerReady: YouTubeProps['onReady'] = useCallback((event: any) => {
@@ -133,10 +123,8 @@ export default function YouTubePlayer({
       if (isPlaying) {
         event.target.playVideo();
       }
-    } catch (e) {
-      // Ignore setup errors 
-    }
-  }, [volume, isPlaying, videoId]);
+    } catch (e) {}
+  }, [volume, isPlaying]);
 
   const onPlayerStateChange: YouTubeProps['onStateChange'] = useCallback((event: any) => {
     if (!event.target) return;
@@ -153,9 +141,7 @@ export default function YouTubePlayer({
       try {
         event.target.unMute();
         event.target.setVolume(volume * 100);
-      } catch (e) {
-        // Ignore state change errors
-      }
+      } catch (e) {}
     }
     
     if (event.data === PLAYER_STATES.ENDED) {

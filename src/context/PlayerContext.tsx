@@ -47,10 +47,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  // Don't throw for LIST operations to avoid crashing the app on startup check
-  if (operationType !== OperationType.LIST) {
-    throw new Error(JSON.stringify(errInfo));
-  }
+  throw new Error(JSON.stringify(errInfo));
 }
 
 export interface Artist {
@@ -326,17 +323,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     return onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (!u) {
-        setLikedTracks([]);
-        setFollowedArtists([]);
-        setDownloadedTracks([]);
-      }
     });
   }, []);
 
   // Likes Listener
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setLikedTracks([]);
+      return;
+    }
 
     const q = query(collection(db, 'likes'), where('userId', '==', user.uid));
     return onSnapshot(q, (snapshot) => {
@@ -354,7 +349,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   // Artist Follows Listener
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setFollowedArtists([]);
+      setDownloadedTracks([]);
+      return;
+    }
 
     const q = query(collection(db, 'artistFollows'), where('userId', '==', user.uid));
     const unsubscribeArtists = onSnapshot(q, (snapshot) => {
