@@ -22,6 +22,7 @@ export default function LibraryScreen() {
   const fetchArtistTracks = async (artist: Artist) => {
     setSelectedArtist(artist);
     setLoadingArtist(artist.name);
+    setArtistTracks([]); // Clear previous tracks
     try {
       const tracks = await youtubeService.getPlayableTracks(artist.name);
       setArtistTracks(tracks);

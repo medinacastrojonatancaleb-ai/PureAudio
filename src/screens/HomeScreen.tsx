@@ -55,32 +55,45 @@ export default function HomeScreen() {
         let moodTracks: YouTubeTrack[] = [];
 
         if (activeCategory === 'All' || activeCategory === 'Music') {
-          const [kevin, edmaverick, trending] = await Promise.all([
+          const results = await Promise.allSettled([
             youtubeService.getPlayableTracks('Kevin Kaarl'),
             youtubeService.getPlayableTracks('Ed Maverick'),
             youtubeService.getTrending(),
           ]);
-          greetingTracks = [...kevin.slice(0, 3), ...edmaverick.slice(0, 3)];
-          trendingTracks = trending;
-          moodTracks = [...edmaverick.slice(3, 6), ...kevin.slice(3, 5)];
+          
+          if (results[0].status === 'fulfilled') greetingTracks.push(...results[0].value.slice(0, 3));
+          if (results[1].status === 'fulfilled') greetingTracks.push(...results[1].value.slice(0, 3));
+          
+          if (results[2].status === 'fulfilled') trendingTracks = results[2].value;
+          
+          if (results[1].status === 'fulfilled') moodTracks.push(...results[1].value.slice(3, 6));
+          if (results[0].status === 'fulfilled') moodTracks.push(...results[0].value.slice(3, 5));
         } else if (activeCategory === 'Podcasts') {
-          const [tech, story, comedy] = await Promise.all([
+          const results = await Promise.allSettled([
             youtubeService.getPlayableTracks('Lex Fridman Podcast'),
             youtubeService.getPlayableTracks('The Daily Podcast'),
             youtubeService.getPlayableTracks('Comedy Podcast'),
           ]);
-          greetingTracks = [...tech.slice(0, 3), ...story.slice(0, 3)];
-          trendingTracks = comedy;
-          moodTracks = [...story.slice(3, 6), ...tech.slice(3, 6)];
+          if (results[0].status === 'fulfilled') greetingTracks.push(...results[0].value.slice(0, 3));
+          if (results[1].status === 'fulfilled') greetingTracks.push(...results[1].value.slice(0, 3));
+          if (results[2].status === 'fulfilled') trendingTracks = results[2].value;
+          if (results[1].status === 'fulfilled') moodTracks.push(...results[1].value.slice(3, 6));
+          if (results[0].status === 'fulfilled') moodTracks.push(...results[0].value.slice(3, 6));
         } else if (activeCategory === 'Audiobooks') {
-          const [classic, sciFi, phil] = await Promise.all([
+          const results = await Promise.allSettled([
             youtubeService.getPlayableTracks('Classic Audiobook Full'),
             youtubeService.getPlayableTracks('Sci-Fi Audiobook Full'),
             youtubeService.getPlayableTracks('Philosophy Audiobook Full'),
           ]);
-          greetingTracks = [...classic.slice(0, 3), ...sciFi.slice(0, 3)];
-          trendingTracks = phil;
-          moodTracks = [...sciFi.slice(3, 6), ...classic.slice(3, 6)];
+          if (results[0].status === 'fulfilled') greetingTracks.push(...results[0].value.slice(0, 3));
+          if (results[1].status === 'fulfilled') greetingTracks.push(...results[1].value.slice(0, 3));
+          if (results[2].status === 'fulfilled') trendingTracks = results[2].value;
+          if (results[1].status === 'fulfilled') moodTracks.push(...results[1].value.slice(3, 6));
+          if (results[0].status === 'fulfilled') moodTracks.push(...results[0].value.slice(3, 6));
+        }
+
+        if (greetingTracks.length === 0 && trendingTracks.length === 0 && moodTracks.length === 0) {
+           throw new Error('No content could be loaded');
         }
         
         setSections({
@@ -97,6 +110,8 @@ export default function HomeScreen() {
     }
     loadData();
   }, [activeCategory]);
+
+  const allTracks = React.useMemo(() => [...sections.greeting, ...sections.trending, ...sections.mood], [sections]);
 
   if (loading) {
     return (
@@ -123,8 +138,6 @@ export default function HomeScreen() {
       </div>
     );
   }
-
-  const allTracks = [...sections.greeting, ...sections.trending, ...sections.mood];
 
   return (
     <div className="space-y-8 pb-10">

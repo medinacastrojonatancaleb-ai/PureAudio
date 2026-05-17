@@ -584,14 +584,19 @@ function AppContent() {
                       
                       {/* Visualizer Overlay */}
                       {isPlaying && (
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 flex items-center justify-center gap-1 md:gap-2 pointer-events-none">
-                          {[...Array(8)].map((_, i) => (
-                            <div 
-                              key={i}
-                              className="w-1.5 md:w-2 bg-primary rounded-full animate-visualizer shadow-[0_0_15px_rgba(29,185,84,0.5)]"
-                              style={{ animationDelay: `${i * 0.1}s` }}
-                            />
-                          ))}
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                          <div className="flex items-center justify-center gap-1 h-12">
+                            {[...Array(5)].map((_, i) => (
+                              <div 
+                                key={i}
+                                className="w-1 bg-primary rounded-full animate-visualizer"
+                                style={{ 
+                                  animationDelay: `${i * 0.18}s`,
+                                  boxShadow: '0 0 8px rgba(29, 185, 84, 0.4)'
+                                }}
+                              />
+                            ))}
+                          </div>
                         </div>
                       )}
                     </motion.div>

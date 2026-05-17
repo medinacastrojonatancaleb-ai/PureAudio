@@ -1,9 +1,26 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import ytSearch from "yt-search";
 import { GoogleGenAI } from "@google/genai";
 
 const PORT = process.env.PORT || 3000;
+
+// In-memory cache for API results
+const cache = new Map<string, { data: any, timestamp: number }>();
+const CACHE_TTL = 1000 * 60 * 30; // 30 minutes
+
+function getCached(key: string) {
+  const entry = cache.get(key);
+  if (entry && (Date.now() - entry.timestamp) < CACHE_TTL) {
+    return entry.data;
+  }
+  return null;
+}
+
+function setCache(key: string, data: any) {
+  cache.set(key, { data, timestamp: Date.now() });
+}
 
 export async function createServer() {
   const app = express();
@@ -33,7 +50,12 @@ export async function createServer() {
 
   // Health check
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", env: process.env.NODE_ENV });
+    res.json({ 
+      status: "ok", 
+      env: process.env.NODE_ENV,
+      vercel: !!process.env.VERCEL,
+      timestamp: new Date().toISOString()
+    });
   });
 
   // AI Recommendation Endpoint
@@ -135,9 +157,18 @@ export async function createServer() {
       return res.status(400).json({ error: "Query parameter 'q' is required" });
     }
 
+    const cacheKey = `search_${q}`;
+    const cached = getCached(cacheKey);
+    if (cached) return res.json(cached);
+
     try {
-      const results = await ytSearch(q + " music");
-      const videos = results.videos.slice(0, 15).map(video => ({
+      // Use raw query for global search to avoid steering the algorithm too much
+      const results = await ytSearch(q);
+      if (!results || !results.videos || results.videos.length === 0) {
+        console.warn(`[Server] No results for search: ${q}`);
+        return res.json([]);
+      }
+      const videos = results.videos.slice(0, 20).map(video => ({
         id: video.videoId,
         title: video.title,
         artist: video.author.name,
@@ -145,6 +176,7 @@ export async function createServer() {
         duration: video.timestamp,
         views: video.views
       }));
+      setCache(cacheKey, videos);
       res.json(videos);
     } catch (error) {
       console.error("[Server] Search error:", error);
@@ -153,11 +185,25 @@ export async function createServer() {
   });
 
   app.get("/api/trending", async (req, res) => {
+    const cacheKey = "trending_music";
+    const cached = getCached(cacheKey);
+    if (cached) return res.json(cached);
+
     try {
+      console.log("[Server] Fetching trending...");
       const queries = ["trending music 2024", "top hits 2024", "lofi hip hop"];
       const randomQuery = queries[Math.floor(Math.random() * queries.length)];
       
       const results = await ytSearch(randomQuery);
+      if (!results || !results.videos || results.videos.length === 0) {
+        console.warn("[Server] ytSearch returned no results, using fallbacks");
+        // Fallback tracks if search fails (e.g. data center IP blocking)
+        return res.json([
+          { id: "jfKfPfyJRdk", title: "lofi hip hop radio - beats to relax/study to", artist: "Lofi Girl", thumbnail: "https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg", duration: "LIVE" },
+          { id: "5qap5aO4i9A", title: "lofi hip hop radio - beats to sleep/chill to", artist: "Lofi Girl", thumbnail: "https://i.ytimg.com/vi/5qap5aO4i9A/hqdefault.jpg", duration: "LIVE" },
+          { id: "DWcUYeeTclg", title: "Rainy Night in Tokyo", artist: "Lofi Girl", thumbnail: "https://i.ytimg.com/vi/DWcUYeeTclg/hqdefault.jpg", duration: "3:45" }
+        ]);
+      }
       const videos = results.videos.slice(0, 20).map(video => ({
         id: video.videoId,
         title: video.title,
@@ -165,20 +211,65 @@ export async function createServer() {
         thumbnail: video.image,
         duration: video.timestamp
       }));
+      setCache(cacheKey, videos);
       res.json(videos);
     } catch (error) {
       console.error("[Server] Trending error:", error);
-      res.status(500).json({ error: "Failed to fetch trending" });
+      res.status(500).json({ error: "Failed to fetch trending", details: error instanceof Error ? error.message : String(error) });
     }
   });
   
   app.get("/api/artist/:name", async (req, res) => {
     const { name } = req.params;
+    const cacheKey = `artist_${name.toLowerCase()}`;
+    const cached = getCached(cacheKey);
+    if (cached) return res.json(cached);
+
     try {
-      // Use "official songs" for better relevance
-      const results = await ytSearch(name + " official songs");
-      // Increase limit to 50 and sort by views descending
+      // Searching with "songs" is generally good for getting a track list
+      const results = await ytSearch(name + " songs");
+      if (!results || !results.videos || results.videos.length === 0) {
+        console.warn(`[Server] No results for artist: ${name}`);
+        return res.json([]);
+      }
+
+      const normalizedSearchName = name.toLowerCase().trim();
+      const searchWords = normalizedSearchName.split(/\s+/).filter(w => w.length > 2);
+      
       const videos = results.videos
+        .filter(video => {
+          const lowerTitle = video.title.toLowerCase();
+          const lowerAuthor = (video.author?.name || "").toLowerCase();
+          
+          // 1. Priority: Channel/Author matching
+          const nameInAuthor = lowerAuthor.includes(normalizedSearchName) || 
+                               lowerAuthor.replace(/\s+/g, '').includes(normalizedSearchName.replace(/\s+/g, ''));
+          
+          // 2. Official Sources (Topic channels or Vevo)
+          const isOfficialSource = lowerAuthor.includes("- topic") || lowerAuthor.includes("vevo");
+          const nameInTitle = lowerTitle.includes(normalizedSearchName);
+
+          // 3. Fuzzy author match for typos (handles "josean log" vs "joseang long")
+          const authorWords = lowerAuthor.split(/\s+/).filter(w => w.length > 2);
+          const matchedWordsCount = searchWords.length > 0 ? searchWords.filter(sw => 
+            authorWords.some(aw => aw.includes(sw) || sw.includes(aw))
+          ).length : 0;
+          const isFuzzyArtist = searchWords.length > 0 && matchedWordsCount >= Math.ceil(searchWords.length * 0.8);
+
+          // 4. Exclude irrelevant content
+          const isIrrelevant = lowerTitle.includes("karaoke") || 
+                               lowerTitle.includes("instrumental") ||
+                               lowerTitle.includes("cover by") ||
+                               lowerTitle.includes("parody") ||
+                               lowerTitle.includes("fan made") ||
+                               lowerTitle.includes("full album");
+
+          // Stricter condition: Must be from a channel matching the name, 
+          // or an official source that mentions the name in the title.
+          const isCorrectArtist = nameInAuthor || isFuzzyArtist || (isOfficialSource && nameInTitle);
+          
+          return isCorrectArtist && !isIrrelevant;
+        })
         .sort((a, b) => (b.views || 0) - (a.views || 0))
         .slice(0, 50)
         .map(video => ({
@@ -189,6 +280,8 @@ export async function createServer() {
           duration: video.timestamp,
           views: video.views
         }));
+
+      setCache(cacheKey, videos);
       res.json(videos);
     } catch (error) {
       console.error("[Server] Artist error:", error);
@@ -197,19 +290,22 @@ export async function createServer() {
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (!process.env.VERCEL) {
+    // Only serve static files if NOT on Vercel (Vercel handles static files itself)
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+    }
   }
 
   return app;
@@ -228,9 +324,19 @@ if (process.env.NODE_ENV !== 'production' || (!process.env.VERCEL && !process.en
 let appInstance: any = null;
 
 // Export a handler for Vercel
-export default async (req: any, res: any) => {
-  if (!appInstance) {
-    appInstance = await createServer();
+export default async function handler(req: any, res: any) {
+  try {
+    if (!appInstance) {
+      console.log("[Server] Initializing app instance...");
+      appInstance = await createServer();
+    }
+    // Express app is essentially a function (req, res)
+    return appInstance(req, res);
+  } catch (err) {
+    console.error("[Server] Vercel handler fatal error:", err);
+    res.status(500).json({ 
+      error: "Internal Server Error", 
+      details: err instanceof Error ? err.message : String(err) 
+    });
   }
-  return appInstance(req, res);
-};
+}

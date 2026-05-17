@@ -28,8 +28,13 @@ export default function YouTubePlayer({
 }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null);
   const [isReady, setIsReady] = useState(false);
-  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const activeVideoId = useRef<string | null>(null);
   const { setProgress, seekTarget } = usePlayer();
+
+  // Keep track of the current videoId we SHOULD be playing
+  useEffect(() => {
+    activeVideoId.current = videoId || null;
+  }, [videoId]);
 
   // Progress Interval
   useEffect(() => {
@@ -37,6 +42,13 @@ export default function YouTubePlayer({
     if (isReady && isPlaying && playerRef.current) {
       interval = setInterval(() => {
         try {
+          // Check if the current player video ID matches what we expect
+          // to avoid updating progress for a transitioning video
+          const currentVideoData = playerRef.current.getVideoData?.();
+          if (currentVideoData && currentVideoData.video_id !== activeVideoId.current) {
+            return;
+          }
+
           const current = playerRef.current.getCurrentTime();
           const total = playerRef.current.getDuration();
           if (typeof current === 'number' && typeof total === 'number') {
@@ -52,34 +64,13 @@ export default function YouTubePlayer({
   useEffect(() => {
     if (isReady && playerRef.current && seekTarget !== null) {
       try {
-        playerRef.current.seekTo(seekTarget, true);
+        const currentVideoData = playerRef.current.getVideoData?.();
+        if (currentVideoData && currentVideoData.video_id === activeVideoId.current) {
+          playerRef.current.seekTo(seekTarget, true);
+        }
       } catch (e) {}
     }
   }, [seekTarget, isReady]);
-
-  // Update active video ID when prop changes
-  useEffect(() => {
-    if (videoId && isReady && playerRef.current) {
-      const currentVideoId = playerRef.current.getVideoData?.()?.video_id;
-      if (currentVideoId && currentVideoId !== videoId) {
-        console.log('LOADING NEW VIDEO ID:', videoId);
-        try {
-          // Use loadVideoById to update the existing iframe instead of remounting
-          playerRef.current.loadVideoById(videoId);
-          setActiveVideoId(videoId);
-          if (!isPlaying) {
-             // If we loaded it but we shouldn't be playing yet
-             // Note: loadVideoById starts playing immediately.
-             // We might need cueVideoById if isPlaying is false.
-          }
-        } catch (e) {
-          console.warn('Manual load error:', e);
-        }
-      }
-    } else if (videoId) {
-      setActiveVideoId(videoId);
-    }
-  }, [videoId, isReady, isPlaying]);
 
   // Stop video on unmount
   useEffect(() => {
@@ -87,9 +78,7 @@ export default function YouTubePlayer({
       if (playerRef.current) {
         try {
           playerRef.current.stopVideo?.();
-        } catch (e) {
-          console.warn('Cleanup error:', e);
-        }
+        } catch (e) {}
       }
     };
   }, []);
@@ -98,13 +87,8 @@ export default function YouTubePlayer({
   useEffect(() => {
     if (isReady && playerRef.current) {
       try {
-        const iframe = typeof playerRef.current.getIframe === 'function' ? playerRef.current.getIframe() : null;
-        if (iframe && iframe.parentNode) {
-          playerRef.current.setVolume(volume * 100);
-        }
-      } catch (e) {
-        console.warn('Volume sync error:', e);
-      }
+        playerRef.current.setVolume(volume * 100);
+      } catch (e) {}
     }
   }, [volume, isReady]);
 
@@ -113,21 +97,20 @@ export default function YouTubePlayer({
     if (!isReady || !playerRef.current || !videoId) return;
 
     try {
-      const iframe = typeof playerRef.current.getIframe === 'function' ? playerRef.current.getIframe() : null;
-      if (iframe && iframe.parentNode) {
+      const currentVideoData = playerRef.current.getVideoData?.();
+      // Only control if the player is currently on the correct video
+      if (currentVideoData && currentVideoData.video_id === activeVideoId.current) {
         if (isPlaying) {
           playerRef.current.playVideo();
         } else {
           playerRef.current.pauseVideo();
         }
       }
-    } catch (e) {
-      console.warn('Playback control error:', e);
-    }
+    } catch (e) {}
   }, [isPlaying, isReady, videoId]);
 
   const onPlayerReady: YouTubeProps['onReady'] = useCallback((event: any) => {
-    console.log('PLAYER READY');
+    console.log('PLAYER READY', videoId);
     if (!event.target) return;
     
     playerRef.current = event.target;
@@ -135,24 +118,26 @@ export default function YouTubePlayer({
     
     try {
       event.target.setVolume(volume * 100);
-      event.target.mute();
-      if (isPlaying && videoId) {
+      // We start muted to bypass autoplay restrictions better, then unmute on first play
+      event.target.mute(); 
+      if (isPlaying) {
         event.target.playVideo();
       }
-    } catch (e) {
-      console.warn('Initial player setup error:', e);
-    }
-  }, [volume, isPlaying, videoId]);
+    } catch (e) {}
+  }, [volume, isPlaying]);
 
   const onPlayerStateChange: YouTubeProps['onStateChange'] = useCallback((event: any) => {
     if (!event.target) return;
     
-    // Ignore events if the videoId has changed but this event is from the previous one
-    // Note: react-youtube doesn't easily expose the current video ID in the event target
-    // but we can try to be defensive.
+    const currentVideoData = event.target.getVideoData?.();
+    const eventVideoId = currentVideoData?.video_id;
+
+    // Only process events for the current intended video
+    if (eventVideoId && eventVideoId !== activeVideoId.current) {
+       return;
+    }
     
     if (event.data === PLAYER_STATES.PLAYING) {
-      console.log('VIDEO PLAYING:', videoId);
       try {
         event.target.unMute();
         event.target.setVolume(volume * 100);
@@ -160,14 +145,21 @@ export default function YouTubePlayer({
     }
     
     if (event.data === PLAYER_STATES.ENDED) {
-      console.log('VIDEO ENDED:', videoId);
-      // Only trigger end if it's really the end of the intended video
-      onTrackEnd?.();
+      console.log('VIDEO ENDED:', eventVideoId);
+      // Avoid rapid-fire end events (must have played at least 5 seconds or it's been a while since last end)
+      const currentTime = event.target.getCurrentTime();
+      if (currentTime > 5 || currentTime === 0) {
+        onTrackEnd?.();
+      }
     }
-  }, [onTrackEnd, volume, videoId]);
+  }, [onTrackEnd, volume]);
 
   const onPlayerError: YouTubeProps['onError'] = useCallback((event: any) => {
-    console.error('YouTube Player Error:', event.data);
+    const currentVideoData = event.target?.getVideoData?.();
+    if (currentVideoData && currentVideoData.video_id !== activeVideoId.current) {
+       return;
+    }
+    console.error('YouTube Player Error:', event.data, activeVideoId.current);
     onError?.(event.data);
   }, [onError]);
 

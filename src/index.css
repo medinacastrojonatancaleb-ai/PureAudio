@@ -47,8 +47,8 @@
   }
 
   @keyframes visualizer {
-    0%, 100% { height: 10%; }
-    50% { height: 60%; }
+    0%, 100% { height: 15%; }
+    50% { height: 50%; }
   }
 
   .animate-visualizer {
