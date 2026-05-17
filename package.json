@@ -4,15 +4,18 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "tsx server.ts",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node dist/server.cjs"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.3.0",
     "clsx": "^2.1.1",
+    "esbuild": "^0.28.0",
+    "express": "^5.2.1",
     "firebase": "^11.0.1",
     "lucide-react": "^0.454.0",
     "motion": "^11.11.11",
@@ -23,11 +26,15 @@
     "react-router-dom": "^6.27.0",
     "react-youtube": "^10.1.0",
     "recharts": "^2.13.0",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "tsx": "^4.22.0",
+    "yt-search": "^2.13.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/yt-search": "^2.10.3",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",

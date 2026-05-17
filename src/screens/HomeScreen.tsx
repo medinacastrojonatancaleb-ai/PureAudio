@@ -5,26 +5,28 @@ import { usePlayer } from '../context/PlayerContext';
 import { youtubeService, YouTubeTrack } from '../services/youtubeService';
 
 export default function HomeScreen() {
-  const { playTrack, currentTrack, followedArtists, toggleFollowArtist } = usePlayer();
+  const { 
+    playTrack, 
+    currentTrack, 
+    followedArtists, 
+    toggleFollowArtist
+  } = usePlayer();
   const [sections, setSections] = useState<{
     greeting: YouTubeTrack[];
     trending: YouTubeTrack[];
     mood: YouTubeTrack[];
   }>({ greeting: [], trending: [], mood: [] });
   const [loading, setLoading] = useState(true);
-  const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
+  const [error, setError] = useState<'general' | null>(null);
 
   useEffect(() => {
     async function loadData() {
-      if (!apiKey || apiKey.includes('YOUR_')) {
-        setLoading(false);
-        return;
-      }
+      setError(null);
       try {
         const [kevin, edmaverick, trending] = await Promise.all([
-          youtubeService.getPlayableTracks('Kevin Kaarl', apiKey),
-          youtubeService.getPlayableTracks('Ed Maverick', apiKey),
-          youtubeService.getTrending(apiKey),
+          youtubeService.getPlayableTracks('Kevin Kaarl'),
+          youtubeService.getPlayableTracks('Ed Maverick'),
+          youtubeService.getTrending(),
         ]);
         
         setSections({
@@ -32,14 +34,15 @@ export default function HomeScreen() {
           trending: trending,
           mood: [...edmaverick.slice(3, 6), ...kevin.slice(3, 5)]
         });
-      } catch (e) {
-        console.error('Home load error:', e);
+      } catch (err: any) {
+        console.error('Home load error:', err);
+        setError('general');
       } finally {
         setLoading(false);
       }
     }
     loadData();
-  }, [apiKey]);
+  }, []);
 
   if (loading) {
     return (
@@ -49,26 +52,19 @@ export default function HomeScreen() {
     );
   }
 
-  if (!apiKey || apiKey.includes('YOUR_')) {
+  if (error) {
     return (
       <div className="p-8 space-y-6 text-center max-w-lg mx-auto">
-        <div className="bg-primary/10 p-8 rounded-3xl border border-primary/20 space-y-4">
-          <Music2 size={48} className="mx-auto text-primary animate-bounce" />
-          <h1 className="text-2xl font-black">Ready to listen?</h1>
-          <p className="text-gray-400 leading-relaxed">
-            To start playing music, you need a YouTube API Key. Please add it in the 
-            <span className="text-white font-bold mx-1">Settings</span> menu.
-          </p>
-          <div className="pt-4">
-            <a 
-              href="https://console.cloud.google.com/apis/credentials" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-primary hover:underline font-bold text-sm"
-            >
-              Get a YouTube API Key →
-            </a>
-          </div>
+        <div className="bg-white/5 p-12 rounded-3xl border border-white/10 space-y-4">
+           <Music2 size={48} className="mx-auto text-gray-500 opacity-20" />
+           <h1 className="text-xl font-bold">Something went wrong</h1>
+           <p className="text-gray-400 text-sm">Failed to load recommendations. Please try again later.</p>
+           <button 
+             onClick={() => window.location.reload()}
+             className="bg-white text-black px-6 py-2 rounded-full font-bold text-sm hover:scale-105 transition-transform"
+           >
+             Retry
+           </button>
         </div>
       </div>
     );

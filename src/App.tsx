@@ -70,17 +70,14 @@ function AppContent() {
     if ([101, 150].includes(code) && currentTrack) {
       console.warn(`Track ${currentTrack.title} is restricted. Searching for alternative...`);
       try {
-        const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
-        if (apiKey) {
-          const results = await youtubeService.search(`${currentTrack.title} ${currentTrack.artist} topic`, apiKey);
-          // Filter out the current restricted ID
-          const alternative = results.find(t => t.id !== currentTrack.id);
-          if (alternative) {
-             console.log('Found alternative track:', alternative.title, alternative.id);
-             // When playing an alternative, keep the current queue
-             playTrack(alternative, queue);
-             return;
-          }
+        const results = await youtubeService.search(`${currentTrack.title} ${currentTrack.artist} topic`);
+        // Filter out the current restricted ID
+        const alternative = results.find(t => t.id !== currentTrack.id);
+        if (alternative) {
+           console.log('Found alternative track:', alternative.title, alternative.id);
+           // When playing an alternative, keep the current queue
+           playTrack(alternative, queue);
+           return;
         }
       } catch (e) {
         console.error('Fallback search failed:', e);
@@ -218,21 +215,30 @@ function AppContent() {
           </div>
 
           <div className="flex items-center gap-4 ml-auto">
-            <button 
-              onClick={user ? logout : login}
-              className="flex items-center gap-2 bg-black hover:bg-[#282828] transition-colors rounded-full p-1 pr-3"
-            >
-              <div className="w-7 h-7 rounded-full bg-[#333333] flex items-center justify-center overflow-hidden">
-                {user?.photoURL ? (
-                  <img src={user.photoURL} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <User size={16} />
-                )}
-              </div>
-              <span className="text-xs font-bold text-white truncate max-w-[100px]">
-                {user ? (user.displayName || 'User') : 'Log in'}
-              </span>
-            </button>
+            {!user ? (
+              <button 
+                onClick={login}
+                className="bg-white text-black text-sm font-black px-6 py-2 rounded-full hover:scale-105 active:scale-95 transition-all shadow-lg"
+              >
+                Log in
+              </button>
+            ) : (
+              <button 
+                onClick={logout}
+                className="flex items-center gap-2 bg-black/40 hover:bg-black/60 transition-colors rounded-full p-1 pr-3 border border-white/10"
+              >
+                <div className="w-7 h-7 rounded-full bg-[#333333] flex items-center justify-center overflow-hidden">
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={16} />
+                  )}
+                </div>
+                <span className="text-xs font-bold text-white truncate max-w-[100px]">
+                  {user.displayName || 'User'}
+                </span>
+              </button>
+            )}
           </div>
         </header>
 

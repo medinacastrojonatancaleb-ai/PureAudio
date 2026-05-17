@@ -17,26 +17,39 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<YouTubeTrack[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [error, setError] = useState<'general' | null>(null);
   const { 
     playTrack, 
     currentTrack, 
     toggleLike, 
     likedTracks, 
     followedArtists, 
-    toggleFollowArtist 
+    toggleFollowArtist
   } = usePlayer();
-  const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
 
   const handleSearch = async (term: string) => {
-    if (!term.trim()) {
+    const trimmedTerm = term.trim();
+    if (!trimmedTerm) {
       setResults([]);
+      setError(null);
       return;
     }
     
     setIsSearching(true);
-    const tracks = await youtubeService.search(term, apiKey);
-    setResults(tracks);
-    setIsSearching(false);
+    setError(null);
+    console.log('[SearchScreen] Initiating search for:', trimmedTerm);
+    
+    try {
+      const tracks = await youtubeService.search(trimmedTerm);
+      console.log('[SearchScreen] Search successful, found tracks:', tracks.length);
+      setResults(tracks);
+    } catch (err: any) {
+      console.error('[SearchScreen] Search execution failed:', err);
+      setError('general');
+      setResults([]);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   useEffect(() => {
@@ -81,6 +94,20 @@ export default function SearchScreen() {
             <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             <p className="text-xs font-bold uppercase tracking-widest text-primary">Searching...</p>
           </motion.div>
+        ) : error === 'general' ? (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center py-20 text-center space-y-4"
+          >
+            <div className="w-16 h-16 bg-error/10 rounded-full flex items-center justify-center text-error">
+               <Music size={32} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-lg font-black">Search service unavailable</p>
+              <p className="text-sm text-gray-400">Please try again later or check your internet connection.</p>
+            </div>
+          </motion.div>
         ) : results.length > 0 ? (
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
@@ -113,7 +140,7 @@ export default function SearchScreen() {
                           toggleFollowArtist({
                             id: '',
                             name: track.artist,
-                            thumbnail: track.thumbnail // Use track thumbnail as artist thumbnail fallback
+                            thumbnail: track.thumbnail
                           });
                         }}
                         className={`text-[10px] font-black uppercase px-2 py-0.5 rounded transition-all flex items-center gap-1 ${isFollowing ? 'bg-primary/20 text-primary' : 'bg-white/10 text-gray-400 hover:bg-white/20 hover:text-white opacity-0 group-hover:opacity-100'}`}
@@ -132,6 +159,20 @@ export default function SearchScreen() {
                 </motion.div>
               );
             })}
+          </motion.div>
+        ) : query ? (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center py-20 text-center space-y-4"
+          >
+            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-gray-500">
+               <Search size={32} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-lg font-black">No results found for "{query}"</p>
+              <p className="text-sm text-gray-400">Please check your spelling or try a more general search.</p>
+            </div>
           </motion.div>
         ) : (
           <motion.div

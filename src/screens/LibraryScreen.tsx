@@ -12,19 +12,18 @@ export default function LibraryScreen() {
     user, 
     login, 
     followedArtists, 
-    toggleFollowArtist 
+    toggleFollowArtist
   } = usePlayer();
   const [loadingArtist, setLoadingArtist] = useState<string | null>(null);
 
   const playArtistTracks = async (artistName: string) => {
     setLoadingArtist(artistName);
     try {
-      const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
-      const tracks = await youtubeService.getPlayableTracks(artistName, apiKey);
+      const tracks = await youtubeService.getPlayableTracks(artistName);
       if (tracks.length > 0) {
         playTrack(tracks[0], tracks);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to play artist tracks:', error);
     } finally {
       setLoadingArtist(null);
@@ -35,11 +34,6 @@ export default function LibraryScreen() {
     <div className="space-y-12 pb-20">
       <header className="flex items-center justify-between">
         <h2 className="text-2xl font-black tracking-tight">Your Library</h2>
-        <div className="flex gap-2">
-           <button className="p-2 bg-white/5 hover:bg-white/10 transition-colors rounded-full text-white">
-              <Settings size={20} />
-           </button>
-        </div>
       </header>
 
       {/* Profile Card */}
@@ -60,9 +54,9 @@ export default function LibraryScreen() {
         {!user && (
           <button 
             onClick={login}
-            className="bg-white text-black px-6 py-2 rounded-full font-bold text-sm tracking-tight active:scale-95 transition-all"
+            className="bg-primary text-black px-8 py-3 rounded-full font-black text-sm tracking-tight hover:scale-105 active:scale-95 transition-all shadow-xl shadow-primary/20"
           >
-            Log in
+            Log in with Google
           </button>
         )}
       </section>
