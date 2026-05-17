@@ -52,9 +52,9 @@ export default function HomeScreen() {
       setLoading(true);
       setError(null);
       try {
-        let greetingTracks: YouTubeTrack[] = [];
+        const greetingTracks: YouTubeTrack[] = [];
         let trendingTracks: YouTubeTrack[] = [];
-        let moodTracks: YouTubeTrack[] = [];
+        const moodTracks: YouTubeTrack[] = [];
 
         if (activeCategory === 'All' || activeCategory === 'Music') {
           const results = await Promise.allSettled([

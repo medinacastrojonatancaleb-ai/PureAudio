@@ -91,12 +91,14 @@ function AppContent() {
 
   // Reset lyrics view when track changes & Auto-expand player
   React.useEffect(() => {
-    setShowLyrics(false);
-    setLyrics('');
     if (currentTrack) {
-      setIsExpanded(true);
+      Promise.resolve().then(() => {
+        setShowLyrics(false);
+        setLyrics('');
+        setIsExpanded(true);
+      });
     }
-  }, [currentTrack?.id]);
+  }, [currentTrack]);
 
   const formatTime = (seconds: number) => {
     if (!seconds || isNaN(seconds)) return '0:00';

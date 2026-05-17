@@ -12,8 +12,15 @@ export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error signing in with Google", error);
+    if (error.code === 'auth/popup-blocked') {
+      alert("Please allow popups for this site to sign in with Google.");
+    } else if (error.code === 'auth/cancelled-popup-request') {
+      // Ignore
+    } else {
+      alert(`Login failed: ${error.message}`);
+    }
     throw error;
   }
 };
