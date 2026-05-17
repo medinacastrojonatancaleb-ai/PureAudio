@@ -178,8 +178,8 @@ function AppContent() {
                       <Heart size={24} fill="white" className="text-white" />
                    </div>
                    <div className="flex-1 overflow-hidden">
-                      <p className="text-sm font-bold text-white">Liked Songs</p>
-                      <p className="text-xs text-gray-400">Playlist • {likedTracks.length} songs</p>
+                      <p className="text-sm font-bold text-white">{t('liked_songs')}</p>
+                      <p className="text-xs text-gray-400">{t('playlist')} • {likedTracks.length} {t('songs')}</p>
                    </div>
                  </div>
                )}
@@ -199,17 +199,17 @@ function AppContent() {
                    </div>
                    <div className="flex-1 overflow-hidden">
                       <p className="text-sm font-bold truncate text-white">{artist.name}</p>
-                      <p className="text-xs text-gray-400">Artist Album</p>
+                      <p className="text-xs text-gray-400">{t('artist_album')}</p>
                    </div>
                  </div>
                ))}
 
                {likedTracks.length === 0 && followedArtists.length === 0 && (
                  <div className="p-4 rounded-xl bg-[#242424] space-y-4">
-                    <p className="font-bold text-sm">Create your first playlist</p>
-                    <p className="text-xs text-gray-400">It's easy, we'll help you</p>
+                    <p className="font-bold text-sm">{t('create_playlist')}</p>
+                    <p className="text-xs text-gray-400">{t('easy_help')}</p>
                     <button className="bg-white text-black text-xs font-bold px-4 py-2 rounded-full hover:scale-105 transition-transform" onClick={() => setActiveTab('search')}>
-                       Browse tracks
+                       {t('browse_tracks')}
                     </button>
                  </div>
                )}
@@ -272,7 +272,7 @@ function AppContent() {
                 onClick={login}
                 className="bg-white text-black text-sm font-black px-6 py-2 rounded-full hover:scale-105 active:scale-95 transition-all shadow-lg"
               >
-                Log in
+                {t('log_in')}
               </button>
             ) : (
               <button 
@@ -331,7 +331,7 @@ function AppContent() {
                     {currentTrack?.title || "Welcome"}
                   </p>
                   <p className="text-[11px] text-gray-400 truncate uppercase tracking-tight">
-                    {currentTrack?.artist || "Tap a song to play"}
+                    {currentTrack?.artist || t('tap_to_play')}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 pr-2">
@@ -515,19 +515,19 @@ function AppContent() {
           active={activeTab === 'home'} 
           onClick={() => setActiveTab('home')} 
           icon={<Home size={22} />} 
-          label="Home" 
+          label={t('home')} 
         />
         <NavButton 
           active={activeTab === 'search'} 
           onClick={() => setActiveTab('search')} 
           icon={<Search size={22} />} 
-          label="Search" 
+          label={t('search')} 
         />
         <NavButton 
           active={activeTab === 'library'} 
           onClick={() => setActiveTab('library')} 
           icon={<Library size={22} />} 
-          label="Library" 
+          label={t('library')} 
         />
       </nav>
 
@@ -584,12 +584,12 @@ function AppContent() {
                       
                       {/* Visualizer Overlay */}
                       {isPlaying && (
-                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center gap-1.5 p-12">
-                          {[...Array(12)].map((_, i) => (
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 flex items-center justify-center gap-1 md:gap-2 pointer-events-none">
+                          {[...Array(8)].map((_, i) => (
                             <div 
                               key={i}
-                              className="w-2 md:w-3 bg-primary rounded-full animate-visualizer"
-                              style={{ animationDelay: `${i * 0.15}s` }}
+                              className="w-1.5 md:w-2 bg-primary rounded-full animate-visualizer shadow-[0_0_15px_rgba(29,185,84,0.5)]"
+                              style={{ animationDelay: `${i * 0.1}s` }}
                             />
                           ))}
                         </div>

@@ -50,7 +50,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
-interface Artist {
+export interface Artist {
   id: string; // channelId or similar
   name: string;
   thumbnail: string;
@@ -135,7 +135,27 @@ const translations = {
     show_all: 'Ver todo',
     mood: 'Estado de ánimo',
     followed_msg: 'Artista seguido correctamente',
-    unfollowed_msg: 'Dejado de seguir correctamente'
+    unfollowed_msg: 'Dejado de seguir correctamente',
+    liked_songs: 'Canciones que te gustan',
+    playlist: 'Lista de reproducción',
+    songs: 'canciones',
+    artist_album: 'Álbum del artista',
+    create_playlist: 'Crea tu primera lista',
+    easy_help: 'Es fácil, te ayudaremos',
+    browse_tracks: 'Explorar pistas',
+    log_in: 'Iniciar sesión',
+    tap_to_play: 'Toca una canción para reproducir',
+    followed_artists: 'Artistas que sigues',
+    followed: 'seguidos',
+    find_artists: 'Busca artistas para seguir',
+    fav_appear_here: 'Tus artistas favoritos aparecerán aquí',
+    sync_library: 'Inicia sesión para sincronizar tu biblioteca',
+    songs_appear_here: 'Las canciones que te gusten aparecerán aquí',
+    tap_heart_help: 'Toca el corazón para añadir una canción a mi biblioteca',
+    back_to_library: 'Volver a Biblioteca',
+    virtual_album: 'Álbum Virtual',
+    loading_tracks: 'Cargando pistas...',
+    tracks: 'pistas'
   },
   en: {
     home: 'Home',
@@ -181,7 +201,27 @@ const translations = {
     show_all: 'Show all',
     mood: 'Mood',
     followed_msg: 'Artist added to your library',
-    unfollowed_msg: 'Artist removed from your library'
+    unfollowed_msg: 'Artist removed from your library',
+    liked_songs: 'Liked Songs',
+    playlist: 'Playlist',
+    songs: 'songs',
+    artist_album: 'Artist Album',
+    create_playlist: 'Create your first playlist',
+    easy_help: "It's easy, we'll help you",
+    browse_tracks: 'Browse tracks',
+    log_in: 'Log in',
+    tap_to_play: 'Tap a song to play',
+    followed_artists: 'Followed Artists',
+    followed: 'followed',
+    find_artists: 'Find artists to follow',
+    fav_appear_here: 'Your favorite artists will appear here',
+    sync_library: 'Log in to sync your library',
+    songs_appear_here: 'Songs you like will appear here',
+    tap_heart_help: 'Tap the heart to add a song to your library',
+    back_to_library: 'Back to Library',
+    virtual_album: 'Virtual Album',
+    loading_tracks: 'Loading tracks...',
+    tracks: 'tracks'
   },
 };
 

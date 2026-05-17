@@ -175,14 +175,20 @@ export async function createServer() {
   app.get("/api/artist/:name", async (req, res) => {
     const { name } = req.params;
     try {
-      const results = await ytSearch(name + " songs");
-      const videos = results.videos.slice(0, 10).map(video => ({
-        id: video.videoId,
-        title: video.title,
-        artist: video.author.name,
-        thumbnail: video.image,
-        duration: video.timestamp
-      }));
+      // Use "official songs" for better relevance
+      const results = await ytSearch(name + " official songs");
+      // Increase limit to 50 and sort by views descending
+      const videos = results.videos
+        .sort((a, b) => (b.views || 0) - (a.views || 0))
+        .slice(0, 50)
+        .map(video => ({
+          id: video.videoId,
+          title: video.title,
+          artist: video.author.name,
+          thumbnail: video.image,
+          duration: video.timestamp,
+          views: video.views
+        }));
       res.json(videos);
     } catch (error) {
       console.error("[Server] Artist error:", error);
