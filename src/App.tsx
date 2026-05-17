@@ -25,6 +25,9 @@ export default function App() {
 function AppContent() {
   const [activeTab, setActiveTab] = useState('home');
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(false);
+  const [lyrics, setLyrics] = useState<string>('');
+  const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
 
   const { 
     currentTrack, 
@@ -51,8 +54,43 @@ function AppContent() {
     followedArtists,
     toggleFollowArtist,
     notification,
-    queue
+    queue,
+    language,
+    setLanguage,
+    t
   } = usePlayer();
+
+  const fetchLyrics = async () => {
+    if (!currentTrack) return;
+    setIsLoadingLyrics(true);
+    setShowLyrics(true);
+    try {
+      const result = await youtubeService.getLyrics(currentTrack.title, currentTrack.artist);
+      setLyrics(result);
+    } catch (e) {
+      setLyrics('Failed to load lyrics.');
+    } finally {
+      setIsLoadingLyrics(false);
+    }
+  };
+
+  const copyShareLink = () => {
+    if (!currentTrack) return;
+    const url = `https://www.youtube.com/watch?v=${currentTrack.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      // notify is available from usePlayer
+      // Wait, let's use the notify function from usePlayer
+    });
+  };
+
+  // Reset lyrics view when track changes & Auto-expand player
+  React.useEffect(() => {
+    setShowLyrics(false);
+    setLyrics('');
+    if (currentTrack) {
+      setIsExpanded(true);
+    }
+  }, [currentTrack?.id]);
 
   const formatTime = (seconds: number) => {
     if (!seconds || isNaN(seconds)) return '0:00';
@@ -111,13 +149,13 @@ function AppContent() {
             active={activeTab === 'home'} 
             onClick={() => setActiveTab('home')} 
             icon={<Home size={28} />} 
-            label="Home" 
+            label={t('home')} 
           />
           <SidebarNavButton 
             active={activeTab === 'search'} 
             onClick={() => setActiveTab('search')} 
             icon={<Search size={28} />} 
-            label="Search" 
+            label={t('search')} 
           />
         </nav>
 
@@ -125,7 +163,7 @@ function AppContent() {
            <header className="flex items-center justify-between mb-4 mt-2">
               <div className="flex items-center gap-3 text-gray-400">
                  <Library size={24} />
-                 <span className="font-bold">Your Library</span>
+                 <span className="font-bold">{t('library')}</span>
               </div>
            </header>
            
@@ -194,15 +232,15 @@ function AppContent() {
         {/* Notifications */}
         <AnimatePresence>
           {notification && (
-            <motion.div 
-              initial={{ y: -50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -50, opacity: 0 }}
-              className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-primary text-black px-6 py-3 rounded-full font-black shadow-2xl flex items-center gap-3"
-            >
-              <Users size={20} />
-              {notification.message}
-            </motion.div>
+              <motion.div 
+                initial={{ y: -50, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -50, opacity: 0 }}
+                className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-primary text-black px-6 py-3 rounded-full font-black shadow-2xl flex items-center gap-3"
+              >
+                <Music2 size={20} />
+                {notification.message}
+              </motion.div>
           )}
         </AnimatePresence>
 
@@ -214,8 +252,22 @@ function AppContent() {
              <span className="font-black text-lg">PureAudio</span>
           </div>
 
-          <div className="flex items-center gap-4 ml-auto">
-            {!user ? (
+          <div className="flex items-center gap-3 ml-auto">
+             <div className="hidden sm:flex items-center bg-black/20 rounded-full p-1 ring-1 ring-white/10 mr-2">
+                <button 
+                  onClick={() => setLanguage('es')}
+                  className={`px-3 py-1 rounded-full text-[10px] font-black transition-all ${language === 'es' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}
+                >
+                  ESP
+                </button>
+                <button 
+                  onClick={() => setLanguage('en')}
+                  className={`px-3 py-1 rounded-full text-[10px] font-black transition-all ${language === 'en' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}
+                >
+                  ENG
+                </button>
+             </div>
+             {!user ? (
               <button 
                 onClick={login}
                 className="bg-white text-black text-sm font-black px-6 py-2 rounded-full hover:scale-105 active:scale-95 transition-all shadow-lg"
@@ -509,7 +561,7 @@ function AppContent() {
                 </button>
                 <div className="text-center">
                   <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 font-bold mb-1">Playing from</p>
-                  <p className="font-bold text-sm">Now Playing</p>
+                  <p className="font-bold text-sm">{t('now_playing')}</p>
                 </div>
                 <button className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
                   <MoreHorizontal size={24} />
@@ -517,15 +569,56 @@ function AppContent() {
               </header>
   
               <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-12 md:gap-24 overflow-y-auto scrollbar-hide py-8">
-                {/* Album Art Section */}
-                <motion.div 
-                  layoutId="player-art"
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="w-full max-w-[320px] md:max-w-[450px] aspect-square rounded-2xl md:rounded-[32px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] ring-1 ring-white/10 flex-shrink-0"
-                >
-                  <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" />
-                </motion.div>
+                {/* Album Art Section or Lyrics */}
+                <AnimatePresence mode="wait">
+                  {!showLyrics ? (
+                    <motion.div 
+                      key="album-art"
+                      layoutId="player-art"
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.9, opacity: 0 }}
+                      className="w-full max-w-[320px] md:max-w-[450px] aspect-square rounded-2xl md:rounded-[32px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] ring-1 ring-white/10 flex-shrink-0 relative group"
+                    >
+                      <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" />
+                      
+                      {/* Visualizer Overlay */}
+                      {isPlaying && (
+                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center gap-1.5 p-12">
+                          {[...Array(12)].map((_, i) => (
+                            <div 
+                              key={i}
+                              className="w-2 md:w-3 bg-primary rounded-full animate-visualizer"
+                              style={{ animationDelay: `${i * 0.15}s` }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </motion.div>
+                  ) : (
+                    <motion.div 
+                      key="lyrics"
+                      initial={{ y: 50, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: 50, opacity: 0 }}
+                      className="w-full max-w-2xl h-[400px] md:h-full overflow-y-auto scrollbar-hide py-8 flex flex-col items-center"
+                    >
+                      {isLoadingLyrics ? (
+                        <div className="flex flex-col items-center gap-4 mt-20">
+                          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                          <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">{t('summoning_lyrics')}</p>
+                        </div>
+                      ) : (
+                        <div className="text-center space-y-6">
+                           <p className="text-2xl md:text-3xl font-black text-white/90 leading-relaxed whitespace-pre-wrap">
+                             {lyrics || t('no_lyrics')}
+                           </p>
+                           <p className="text-xs text-gray-500 italic pb-20">{t('lyrics_by')}</p>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
   
                 {/* Control Center Section */}
                 <div className="w-full max-w-[450px] flex flex-col gap-8 md:gap-12 flex-1">
@@ -537,34 +630,34 @@ function AppContent() {
                     >
                       {currentTrack.title}
                     </motion.h1>
-                    <div className="flex flex-col items-center md:items-start">
-                      <motion.p 
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.1 }}
-                        className="text-xl md:text-2xl text-primary font-bold truncate"
-                      >
-                        {currentTrack.artist}
-                      </motion.p>
-                      <button 
-                        onClick={() => toggleFollowArtist({
-                          id: '',
-                          name: currentTrack.artist,
-                          thumbnail: currentTrack.thumbnail
-                        })}
-                        className={`mt-2 flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold transition-all ${
-                          followedArtists.some(a => a.name === currentTrack.artist)
-                            ? 'bg-primary border-primary text-black' 
-                            : 'bg-transparent border-white/20 text-white hover:border-white'
-                        }`}
-                      >
-                        {followedArtists.some(a => a.name === currentTrack.artist) ? (
-                          <><UserCheck size={14} /> Following</>
-                        ) : (
-                          <><UserPlus size={14} /> Follow Artist</>
-                        )}
-                      </button>
-                    </div>
+                           <div className="flex flex-col items-center md:items-start">
+                             <motion.p 
+                               initial={{ y: 20, opacity: 0 }}
+                               animate={{ y: 0, opacity: 1 }}
+                               transition={{ delay: 0.1 }}
+                               className="text-xl md:text-2xl text-primary font-bold truncate"
+                             >
+                               {currentTrack.artist}
+                             </motion.p>
+                             <button 
+                               onClick={() => toggleFollowArtist({
+                                 id: '',
+                                 name: currentTrack.artist,
+                                 thumbnail: currentTrack.thumbnail
+                               })}
+                               className={`mt-2 flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold transition-all ${
+                                 followedArtists.some(a => a.name === currentTrack.artist)
+                                   ? 'bg-primary border-primary text-black' 
+                                   : 'bg-transparent border-white/20 text-white hover:border-white'
+                               }`}
+                             >
+                               {followedArtists.some(a => a.name === currentTrack.artist) ? (
+                                 <><UserCheck size={14} /> {t('following')}</>
+                               ) : (
+                                 <><UserPlus size={14} /> {t('follow_artist')}</>
+                               )}
+                             </button>
+                           </div>
                   </div>
   
                   {/* Progress Section */}
@@ -627,15 +720,31 @@ function AppContent() {
 
                     <div className="flex items-center justify-between pt-4 border-t border-white/5">
                       <button 
-                        onClick={() => toggleLike(currentTrack)}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors ${isLiked ? 'text-primary' : 'text-gray-400'}`}
-                      >
+                         onClick={() => toggleLike(currentTrack)}
+                         className={`flex items-center gap-2 px-6 py-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors ${isLiked ? 'text-primary' : 'text-gray-400'}`}
+                       >
                         <Heart size={24} fill={isLiked ? "currentColor" : "none"} />
-                        <span className="font-bold text-white">Save to Liked Songs</span>
+                        <span className="font-bold text-white">{t('save_liked')}</span>
                       </button>
-                      <button className="p-4 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white">
-                        <Share2 size={24} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => showLyrics ? setShowLyrics(false) : fetchLyrics()}
+                          className={`p-4 rounded-full transition-colors ${showLyrics ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white'}`}
+                          title="Lyrics"
+                        >
+                          <Music2 size={24} />
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const url = `https://www.youtube.com/watch?v=${currentTrack.id}`;
+                            navigator.clipboard.writeText(url);
+                            notify(t('link_copied'), 'info');
+                          }}
+                          className="p-4 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+                        >
+                          <Share2 size={24} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

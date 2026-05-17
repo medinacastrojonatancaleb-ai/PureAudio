@@ -85,7 +85,101 @@ interface PlayerContextType {
   toggleFollowArtist: (artist: Artist) => Promise<void>;
   notification: {message: string, type: 'success' | 'info'} | null;
   notify: (message: string, type?: 'success' | 'info') => void;
+  language: 'es' | 'en';
+  setLanguage: (lang: 'es' | 'en') => void;
+  t: (key: string) => string;
 }
+
+const translations = {
+  es: {
+    home: 'Inicio',
+    search: 'Buscar',
+    library: 'Biblioteca',
+    greetings: 'Buenas noches',
+    ai_mood: 'Magia de IA',
+    ai_mix: 'Tu mezcla de IA',
+    target_age: 'Edad objetivo',
+    magic: 'Magia',
+    searching: 'Buscando...',
+    lyrics: 'Letras',
+    no_lyrics: 'No hay letras disponibles para esta obra maestra.',
+    summoning_lyrics: 'Invocando letras...',
+    lyrics_by: 'Letras proporcionadas por PureAudio AI',
+    share: 'Compartir',
+    save_liked: 'Guardar en Canciones que te gustan',
+    now_playing: 'Sonando ahora',
+    play_all: 'Reproducir todo',
+    something_wrong: 'Algo salió mal',
+    retry: 'Reintentar',
+    search_placeholder: 'Música para...',
+    age_kid: 'Niño',
+    age_teen: 'Joven',
+    age_genz: 'Gen Z',
+    age_millennial: 'Millennial',
+    age_classic: 'Clásico',
+    link_copied: '¡Enlace copiado al portapapeles!',
+    ai_mood_desc: 'Describe cómo te sientes o qué estás haciendo, y deja que Gemini cree la vibra perfecta para ti.',
+    following: 'Siguiendo',
+    follow_artist: 'Seguir artista',
+    unfollow: 'Dejar de seguir',
+    browse_all: 'Explorar todo',
+    sign_in_sync: 'Inicia sesión para sincronizar tu biblioteca',
+    premium_member: 'Miembro Premium',
+    no_results: 'No se encontraron resultados para',
+    check_spelling: 'Por favor revisa tu ortografía o intenta una búsqueda más general.',
+    cat_all: 'Todo',
+    cat_music: 'Música',
+    cat_podcasts: 'Podcasts',
+    cat_audiobooks: 'Audiolibros',
+    jump_back_in: 'Volver a escuchar',
+    show_all: 'Ver todo',
+    mood: 'Estado de ánimo'
+  },
+  en: {
+    home: 'Home',
+    search: 'Search',
+    library: 'Library',
+    greetings: 'Good evening',
+    ai_mood: 'AI Mood Magic',
+    ai_mix: 'Your AI Mix',
+    target_age: 'Target Age',
+    magic: 'Magic',
+    searching: 'Searching...',
+    lyrics: 'Lyrics',
+    no_lyrics: 'No lyrics available for this masterpiece.',
+    summoning_lyrics: 'Summoning Lyrics...',
+    lyrics_by: 'Lyrics provided by PureAudio AI',
+    share: 'Share',
+    save_liked: 'Save to Liked Songs',
+    now_playing: 'Now Playing',
+    play_all: 'Play All',
+    something_wrong: 'Something went wrong',
+    retry: 'Retry',
+    search_placeholder: 'Music for...',
+    age_kid: 'Kid',
+    age_teen: 'Teen',
+    age_genz: 'Gen Z',
+    age_millennial: 'Millennial',
+    age_classic: 'Classic',
+    link_copied: 'Link copied to clipboard!',
+    ai_mood_desc: "Describe how you feel or what you're doing, and let Gemini create the perfect vibe for you.",
+    following: 'Following',
+    follow_artist: 'Follow Artist',
+    unfollow: 'Unfollow',
+    browse_all: 'Browse all',
+    sign_in_sync: 'Sign in to sync your library',
+    premium_member: 'Premium Member',
+    no_results: 'No results found for',
+    check_spelling: 'Please check your spelling or try a more general search.',
+    cat_all: 'All',
+    cat_music: 'Music',
+    cat_podcasts: 'Podcasts',
+    cat_audiobooks: 'Audiobooks',
+    jump_back_in: 'Jump back in',
+    show_all: 'Show all',
+    mood: 'Mood'
+  },
+};
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 
@@ -105,6 +199,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [repeatMode, setRepeatMode] = useState<'none' | 'all' | 'one'>('none');
   const [followedArtists, setFollowedArtists] = useState<Artist[]>([]);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
+  const [language, setLanguage] = useState<'es' | 'en'>(() => {
+    const saved = localStorage.getItem('pureaudio_lang');
+    return (saved as 'es' | 'en') || 'es';
+  });
+
+  const t = useCallback((key: string) => {
+    return (translations[language] as any)[key] || key;
+  }, [language]);
+
+  useEffect(() => {
+    localStorage.setItem('pureaudio_lang', language);
+  }, [language]);
 
   const notify = useCallback((message: string, type: 'success' | 'info' = 'success') => {
     setNotification({ message, type });
@@ -386,7 +492,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       followedArtists,
       toggleFollowArtist,
       notification,
-      notify
+      notify,
+      language,
+      setLanguage,
+      t
     }}>
       {children}
     </PlayerContext.Provider>

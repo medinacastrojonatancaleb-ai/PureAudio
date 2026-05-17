@@ -24,7 +24,8 @@ export default function SearchScreen() {
     toggleLike, 
     likedTracks, 
     followedArtists, 
-    toggleFollowArtist
+    toggleFollowArtist,
+    t
   } = usePlayer();
 
   const handleSearch = async (term: string) => {
@@ -69,7 +70,7 @@ export default function SearchScreen() {
           <Search size={20} className="text-gray-400" />
           <input 
             type="text" 
-            placeholder="What do you want to listen to?" 
+            placeholder={t('search_placeholder')} 
             className="flex-1 bg-transparent border-none outline-none text-white text-sm font-medium placeholder:text-gray-500"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -92,7 +93,7 @@ export default function SearchScreen() {
             className="flex flex-col items-center justify-center py-20 gap-4"
           >
             <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs font-bold uppercase tracking-widest text-primary">Searching...</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary">{t('searching')}</p>
           </motion.div>
         ) : error === 'general' ? (
           <motion.div 
@@ -104,7 +105,7 @@ export default function SearchScreen() {
                <Music size={32} />
             </div>
             <div className="space-y-1">
-              <p className="text-lg font-black">Search service unavailable</p>
+              <p className="text-lg font-black">{t('something_wrong')}</p>
               <p className="text-sm text-gray-400">Please try again later or check your internet connection.</p>
             </div>
           </motion.div>
@@ -146,7 +147,7 @@ export default function SearchScreen() {
                         className={`text-[10px] font-black uppercase px-2 py-0.5 rounded transition-all flex items-center gap-1 ${isFollowing ? 'bg-primary/20 text-primary' : 'bg-white/10 text-gray-400 hover:bg-white/20 hover:text-white opacity-0 group-hover:opacity-100'}`}
                       >
                         {isFollowing ? <UserCheck size={10} /> : <UserPlus size={10} />}
-                        {isFollowing ? 'Following' : 'Follow'}
+                        {isFollowing ? t('following') : t('follow_artist')}
                       </button>
                     </div>
                   </div>
@@ -170,8 +171,8 @@ export default function SearchScreen() {
                <Search size={32} />
             </div>
             <div className="space-y-1">
-              <p className="text-lg font-black">No results found for "{query}"</p>
-              <p className="text-sm text-gray-400">Please check your spelling or try a more general search.</p>
+              <p className="text-lg font-black">{t('no_results')} "{query}"</p>
+              <p className="text-sm text-gray-400">{t('check_spelling')}</p>
             </div>
           </motion.div>
         ) : (
@@ -182,7 +183,7 @@ export default function SearchScreen() {
           >
             {/* Categories Grid */}
             <section className="space-y-4">
-              <h2 className="text-2xl font-black tracking-tight">Browse all</h2>
+              <h2 className="text-2xl font-black tracking-tight">{t('browse_all')}</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {CATEGORIES.map((cat) => (
                   <motion.div

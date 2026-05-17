@@ -61,6 +61,33 @@ export const youtubeService = {
     }
   },
 
+  async getAiMoodTracks(prompt: string, age?: number): Promise<YouTubeTrack[]> {
+    try {
+      const response = await fetch('/api/ai/mood', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, age })
+      });
+      if (!response.ok) throw new Error('AI recommendation failed');
+      return await response.json();
+    } catch (error) {
+      console.error('AI Mood service error:', error);
+      throw error;
+    }
+  },
+
+  async getLyrics(title: string, artist: string): Promise<string> {
+    try {
+      const response = await fetch(`/api/lyrics?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`);
+      if (!response.ok) throw new Error('Lyrics failed');
+      const data = await response.json();
+      return data.lyrics;
+    } catch (error) {
+      console.error('Lyrics service error:', error);
+      return 'No lyrics found for this track.';
+    }
+  },
+
   async getTrackDetails(videoId: string, _apiKey?: string): Promise<any> {
     // We could implement a proxy for this too if needed, but search often provides enough
     return { id: videoId };

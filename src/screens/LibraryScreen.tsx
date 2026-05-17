@@ -12,7 +12,8 @@ export default function LibraryScreen() {
     user, 
     login, 
     followedArtists, 
-    toggleFollowArtist
+    toggleFollowArtist,
+    t
   } = usePlayer();
   const [loadingArtist, setLoadingArtist] = useState<string | null>(null);
 
@@ -33,7 +34,7 @@ export default function LibraryScreen() {
   return (
     <div className="space-y-12 pb-20">
       <header className="flex items-center justify-between">
-        <h2 className="text-2xl font-black tracking-tight">Your Library</h2>
+        <h2 className="text-2xl font-black tracking-tight">{t('library')}</h2>
       </header>
 
       {/* Profile Card */}
@@ -48,7 +49,7 @@ export default function LibraryScreen() {
         <div className="flex-1">
           <h3 className="text-2xl font-black text-white">{user?.displayName || 'Guest User'}</h3>
           <p className="text-sm font-bold text-gray-400 mt-1">
-            {user ? 'Premium Member' : 'Sign in to sync your library'}
+            {user ? t('premium_member') : t('sign_in_sync')}
           </p>
         </div>
         {!user && (
@@ -100,9 +101,9 @@ export default function LibraryScreen() {
                     <button 
                       onClick={(e) => { e.stopPropagation(); toggleFollowArtist(artist); }}
                       className="mt-3 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] uppercase font-black text-gray-500 hover:text-white"
-                    >
-                      Unfollow
-                    </button>
+                      >
+                        {t('unfollow')}
+                      </button>
                  </div>
                </motion.div>
             ))}
