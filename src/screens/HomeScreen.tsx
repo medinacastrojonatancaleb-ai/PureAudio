@@ -10,6 +10,8 @@ export default function HomeScreen() {
     currentTrack, 
     followedArtists, 
     toggleFollowArtist,
+    isPremium,
+    togglePremium,
     t
   } = usePlayer();
   const [activeCategory, setActiveCategory] = useState('All');
@@ -162,6 +164,37 @@ export default function HomeScreen() {
       {/* Greetings Grid */}
       <header className="space-y-4">
         <h1 className="text-3xl font-black tracking-tight">{t('greetings')}</h1>
+
+        {/* Premium Upgrade Banner */}
+        {!isPremium && (
+          <div className="relative overflow-hidden group bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-2xl p-6 shadow-2xl">
+             <div className="absolute top-0 right-0 p-8 opacity-10 scale-[2] pointer-events-none">
+                <Music2 size={120} />
+             </div>
+             <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="space-y-2 text-center md:text-left">
+                   <div className="inline-block px-2 py-0.5 bg-white text-blue-600 rounded text-[10px] font-black uppercase mb-1">
+                      {t('limited_time')}
+                   </div>
+                   <h2 className="text-2xl font-black">{t('upgrade_premium')}</h2>
+                   <div className="flex flex-wrap justify-center md:justify-start gap-4">
+                      {[t('ad_free'), t('high_quality'), t('offline_play')].map((feat, i) => (
+                        <div key={i} className="flex items-center gap-1.5 text-blue-100 text-[10px] font-bold uppercase tracking-wider">
+                           <div className="w-1 h-1 bg-white rounded-full" />
+                           {feat}
+                        </div>
+                      ))}
+                   </div>
+                </div>
+                <button 
+                  onClick={togglePremium}
+                  className="bg-white text-blue-600 px-8 py-3 rounded-full font-black text-sm uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl"
+                >
+                   {t('upgrade')}
+                </button>
+             </div>
+          </div>
+        )}
 
         {/* AI Mood Magic Bar */}
         <section className="relative overflow-hidden group">

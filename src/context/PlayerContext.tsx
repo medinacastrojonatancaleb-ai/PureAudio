@@ -83,6 +83,12 @@ interface PlayerContextType {
   queue: YouTubeTrack[];
   followedArtists: Artist[];
   toggleFollowArtist: (artist: Artist) => Promise<void>;
+  isPremium: boolean;
+  togglePremium: () => void;
+  downloadedTracks: YouTubeTrack[];
+  downloadTrack: (track: YouTubeTrack) => Promise<void>;
+  isHighQuality: boolean;
+  toggleHighQuality: () => void;
   notification: {message: string, type: 'success' | 'info'} | null;
   notify: (message: string, type?: 'success' | 'info') => void;
   language: 'es' | 'en';
@@ -143,7 +149,7 @@ const translations = {
     create_playlist: 'Crea tu primera lista',
     easy_help: 'Es fácil, te ayudaremos',
     browse_tracks: 'Explorar pistas',
-    log_in: 'Iniciar sesión',
+    log_in: 'Acceder con Google',
     tap_to_play: 'Toca una canción para reproducir',
     followed_artists: 'Artistas que sigues',
     followed: 'seguidos',
@@ -155,7 +161,19 @@ const translations = {
     back_to_library: 'Volver a Biblioteca',
     virtual_album: 'Álbum Virtual',
     loading_tracks: 'Cargando pistas...',
-    tracks: 'pistas'
+    tracks: 'pistas',
+    upgrade_premium: 'Actualizar a Premium',
+    premium_features: 'Funciones Premium',
+    ad_free: 'Sin anuncios',
+    high_quality: 'Audio de alta calidad',
+    offline_play: 'Reproducción sin conexión',
+    active: 'Activo',
+    upgrade: 'Actualizar',
+    limited_time: 'Oferta por tiempo limitado',
+    premium_badge: 'PREMIUM',
+    downloading: 'Descargando...',
+    downloaded: 'Descargado',
+    remove_download: 'Eliminar descarga'
   },
   en: {
     home: 'Home',
@@ -209,7 +227,7 @@ const translations = {
     create_playlist: 'Create your first playlist',
     easy_help: "It's easy, we'll help you",
     browse_tracks: 'Browse tracks',
-    log_in: 'Log in',
+    log_in: 'Login with Google',
     tap_to_play: 'Tap a song to play',
     followed_artists: 'Followed Artists',
     followed: 'followed',
@@ -221,7 +239,19 @@ const translations = {
     back_to_library: 'Back to Library',
     virtual_album: 'Virtual Album',
     loading_tracks: 'Loading tracks...',
-    tracks: 'tracks'
+    tracks: 'tracks',
+    upgrade_premium: 'Upgrade to Premium',
+    premium_features: 'Premium Features',
+    ad_free: 'Ad-free music',
+    high_quality: 'High quality audio',
+    offline_play: 'Offline playback',
+    active: 'Active',
+    upgrade: 'Upgrade',
+    limited_time: 'Limited time offer',
+    premium_badge: 'PREMIUM',
+    downloading: 'Downloading...',
+    downloaded: 'Downloaded',
+    remove_download: 'Remove download'
   },
 };
 
@@ -241,6 +271,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [seekTarget, setSeekTarget] = useState<number | null>(null);
   const [isShuffle, setIsShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<'none' | 'all' | 'one'>('none');
+  const [isPremium, setIsPremium] = useState(() => localStorage.getItem('pureaudio_premium') === 'true');
+  const [isHighQuality, setIsHighQuality] = useState(() => localStorage.getItem('pureaudio_hq') === 'true');
+  const [downloadedTracks, setDownloadedTracks] = useState<YouTubeTrack[]>([]);
   const [followedArtists, setFollowedArtists] = useState<Artist[]>([]);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
   const [language, setLanguage] = useState<'es' | 'en'>(() => {
@@ -255,6 +288,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem('pureaudio_lang', language);
   }, [language]);
+
+  useEffect(() => {
+    localStorage.setItem('pureaudio_premium', isPremium.toString());
+  }, [isPremium]);
+
+  useEffect(() => {
+    localStorage.setItem('pureaudio_hq', isHighQuality.toString());
+  }, [isHighQuality]);
 
   const notify = useCallback((message: string, type: 'success' | 'info' = 'success') => {
     setNotification({ message, type });
@@ -310,11 +351,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user) {
       setFollowedArtists([]);
+      setDownloadedTracks([]);
       return;
     }
 
     const q = query(collection(db, 'artistFollows'), where('userId', '==', user.uid));
-    return onSnapshot(q, (snapshot) => {
+    const unsubscribeArtists = onSnapshot(q, (snapshot) => {
       const artists = snapshot.docs.map(doc => ({
         id: doc.data().artistId,
         name: doc.data().artistName,
@@ -324,6 +366,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'artistFollows');
     });
+
+    const qDownloads = query(collection(db, 'downloads'), where('userId', '==', user.uid));
+    const unsubscribeDownloads = onSnapshot(qDownloads, (snapshot) => {
+      const tracks = snapshot.docs.map(doc => ({
+        id: doc.data().trackId,
+        title: doc.data().trackTitle,
+        artist: doc.data().trackArtist,
+        thumbnail: doc.data().trackThumbnail
+      }));
+      setDownloadedTracks(tracks);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'downloads');
+    });
+
+    return () => {
+      unsubscribeArtists();
+      unsubscribeDownloads();
+    };
   }, [user]);
 
   // Track Stats Listener (Global for counting likes)
@@ -499,6 +559,57 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const togglePremium = () => {
+    setIsPremium(prev => {
+      const next = !prev;
+      notify(next ? 'Premium Activated!' : 'Premium Deactivated', 'info');
+      return next;
+    });
+  };
+
+  const toggleHighQuality = () => {
+    if (!isPremium) {
+      notify('Premium feature required!', 'info');
+      return;
+    }
+    setIsHighQuality(prev => !prev);
+  };
+
+  const downloadTrack = async (track: YouTubeTrack) => {
+    if (!isPremium) {
+      notify('Premium feature required!', 'info');
+      return;
+    }
+
+    if (!user) {
+      await login();
+      return;
+    }
+
+    const isDownloaded = downloadedTracks.some(t => t.id === track.id);
+    const downloadId = `${user.uid}_${track.id}`;
+
+    try {
+      if (isDownloaded) {
+        await deleteDoc(doc(db, 'downloads', downloadId));
+        notify(t('remove_download'), 'info');
+      } else {
+        notify(t('downloading'), 'info');
+        await setDoc(doc(db, 'downloads', downloadId), {
+          userId: user.uid,
+          trackId: track.id,
+          trackTitle: track.title,
+          trackArtist: track.artist || '',
+          trackThumbnail: track.thumbnail || '',
+          createdAt: serverTimestamp()
+        });
+        notify(t('downloaded'), 'success');
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `downloads/${downloadId}`);
+    }
+  };
+
   const login = async () => {
     await signInWithGoogle();
   };
@@ -535,6 +646,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       queue,
       followedArtists,
       toggleFollowArtist,
+      isPremium,
+      togglePremium,
+      downloadedTracks,
+      downloadTrack,
+      isHighQuality,
+      toggleHighQuality,
       notification,
       notify,
       language,
