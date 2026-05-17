@@ -31,8 +31,14 @@ export const youtubeService = {
   async search(query: string, _apiKey?: string): Promise<YouTubeTrack[]> {
     try {
       const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-      if (!response.ok) throw new Error(`Search failed: ${response.status}`);
-      return await response.json();
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Search failed response:', text);
+        throw new Error(`Search failed: ${response.status}`);
+      }
+      const data = await response.json();
+      if (!Array.isArray(data)) throw new Error('Invalid search response format');
+      return data;
     } catch (error) {
       console.error('Search service error:', error);
       throw error;
@@ -42,8 +48,14 @@ export const youtubeService = {
   async getTrending(_apiKey?: string): Promise<YouTubeTrack[]> {
     try {
       const response = await fetch('/api/trending');
-      if (!response.ok) throw new Error('Trending failed');
-      return await response.json();
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Trending failed response:', text);
+        throw new Error('Trending failed');
+      }
+      const data = await response.json();
+      if (!Array.isArray(data)) throw new Error('Invalid trending response');
+      return data;
     } catch (error) {
       console.error('Trending error:', error);
       throw error;
@@ -53,8 +65,14 @@ export const youtubeService = {
   async getPlayableTracks(query: string, _apiKey?: string): Promise<YouTubeTrack[]> {
     try {
       const response = await fetch(`/api/artist/${encodeURIComponent(query)}`);
-      if (!response.ok) throw new Error('Artist tracks failed');
-      return await response.json();
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Artist tracks failed response:', text);
+        throw new Error('Artist tracks failed');
+      }
+      const data = await response.json();
+      if (!Array.isArray(data)) throw new Error('Invalid artist response');
+      return data;
     } catch (error) {
       console.error('getPlayableTracks error:', error);
       throw error;

@@ -54,6 +54,7 @@ function AppContent() {
     followedArtists,
     toggleFollowArtist,
     notification,
+    notify,
     queue,
     language,
     setLanguage,
@@ -78,8 +79,7 @@ function AppContent() {
     if (!currentTrack) return;
     const url = `https://www.youtube.com/watch?v=${currentTrack.id}`;
     navigator.clipboard.writeText(url).then(() => {
-      // notify is available from usePlayer
-      // Wait, let's use the notify function from usePlayer
+      notify(t('link_copied'), 'info');
     });
   };
 

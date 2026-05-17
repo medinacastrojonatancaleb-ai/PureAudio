@@ -1,15 +1,20 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import ytSearch from "yt-search";
 import { GoogleGenAI } from "@google/genai";
 
-async function startServer() {
+const PORT = process.env.PORT || 3000;
+
+export async function createServer() {
   const app = express();
-  const PORT = 3000;
+
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) {
+    console.warn("[Server] WARNING: GEMINI_API_KEY is not set. AI features will fail.");
+  }
 
   const genAI = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
+    apiKey: geminiKey || "stub-key",
     httpOptions: {
       headers: {
         'User-Agent': 'aistudio-build',
@@ -25,9 +30,11 @@ async function startServer() {
     if (!prompt) return res.status(400).json({ error: "Prompt is required" });
 
     try {
-      const response = await genAI.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Act as a professional and responsible music curator. 
+      if (!geminiKey) {
+        return res.status(503).json({ error: "AI features are currently unavailable (Missing API Key)" });
+      }
+      const response = await genAI.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
+        contents: [{ role: 'user', parts: [{ text: `Act as a professional and responsible music curator. 
         User is ${age ? age + " years old" : "an adult"}.
         Based on the following mood or description: "${prompt}", suggest 8 real songs that fit perfectly.
 
@@ -40,16 +47,15 @@ async function startServer() {
         Return ONLY a JSON object with the following structure:
         {
           "tracks": [
-            { "title": "Song Title", "artist": "Artist Name" },
-            ...
+            { "title": "Song Title", "artist": "Artist Name" }
           ]
-        }`,
-        config: {
+        }`}]}],
+        generationConfig: {
           responseMimeType: "application/json"
         }
       });
 
-      const text = response.text;
+      const text = response.response.text();
       if (!text) throw new Error("Empty response from AI");
       
       const aiData = JSON.parse(text);
@@ -89,9 +95,10 @@ async function startServer() {
     if (!title) return res.status(400).json({ error: "Title is required" });
 
     try {
-      const response = await genAI.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Find or provide the full lyrics for the song "${title}" by "${artist}". 
+      if (!geminiKey) {
+        return res.json({ lyrics: "AI Features disabled. Please set GEMINI_API_KEY." });
+      }
+      const response = await genAI.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent(`Find or provide the full lyrics for the song "${title}" by "${artist}". 
 
         SAFETY POLICY:
         - If the lyrics contain highly explicit sexual content or extreme hate speech, return "Content unavailable due to safety policy."
@@ -99,10 +106,9 @@ async function startServer() {
         
         If you can provide timestamps (LRC format style, e.g. [00:12.34]Lyric line), that would be amazing. 
         If not, just return the plain text lyrics. 
-        Format the response as a clean string. Do not include extra commentary, just the lyrics.`,
-      });
+        Format the response as a clean string. Do not include extra commentary, just the lyrics.`);
 
-      const lyrics = response.text?.trim() || "No lyrics found.";
+      const lyrics = response.response.text()?.trim() || "No lyrics found.";
       res.json({ lyrics });
     } catch (error) {
       console.error("[Server] Lyrics error:", error);
@@ -118,7 +124,6 @@ async function startServer() {
     }
 
     try {
-      console.log(`[Server] Searching for: ${q}`);
       const results = await ytSearch(q + " music");
       const videos = results.videos.slice(0, 15).map(video => ({
         id: video.videoId,
@@ -137,8 +142,6 @@ async function startServer() {
 
   app.get("/api/trending", async (req, res) => {
     try {
-      // Since yt-search doesn't have a direct "trending" chart like the official API,
-      // we search for general popular music or use a curated list.
       const queries = ["trending music 2024", "top hits 2024", "lofi hip hop"];
       const randomQuery = queries[Math.floor(Math.random() * queries.length)];
       
@@ -177,6 +180,7 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -190,9 +194,20 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  return app;
+}
+
+// Start listener if NOT in a serverless environment
+if (process.env.NODE_ENV !== 'production' || (!process.env.VERCEL && !process.env.AWS_LAMBDA)) {
+  createServer().then(app => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://0.0.0.0:${PORT} [${process.env.NODE_ENV || 'development'}]`);
+    });
   });
 }
 
-startServer();
+// Export a handler for Vercel
+export default async (req: any, res: any) => {
+  const app = await createServer();
+  return app(req, res);
+};

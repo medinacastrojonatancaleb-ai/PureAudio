@@ -133,7 +133,9 @@ const translations = {
     cat_audiobooks: 'Audiolibros',
     jump_back_in: 'Volver a escuchar',
     show_all: 'Ver todo',
-    mood: 'Estado de ánimo'
+    mood: 'Estado de ánimo',
+    followed_msg: 'Artista seguido correctamente',
+    unfollowed_msg: 'Dejado de seguir correctamente'
   },
   en: {
     home: 'Home',
@@ -177,7 +179,9 @@ const translations = {
     cat_audiobooks: 'Audiobooks',
     jump_back_in: 'Jump back in',
     show_all: 'Show all',
-    mood: 'Mood'
+    mood: 'Mood',
+    followed_msg: 'Artist added to your library',
+    unfollowed_msg: 'Artist removed from your library'
   },
 };
 
@@ -439,7 +443,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     try {
       if (isFollowing) {
         await deleteDoc(doc(db, 'artistFollows', followId));
-        notify(`Has dejado de seguir a ${artist.name}`, 'info');
+        notify(t('unfollowed_msg'), 'info');
       } else {
         await setDoc(doc(db, 'artistFollows', followId), {
           userId: user.uid,
@@ -448,7 +452,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           artistThumbnail: artist.thumbnail || '',
           createdAt: serverTimestamp()
         });
-        notify(`Album virtual de ${artist.name} añadido a tu biblioteca`, 'success');
+        notify(t('followed_msg'), 'success');
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `artistFollows/${followId}`);
