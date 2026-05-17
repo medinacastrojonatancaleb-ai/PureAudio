@@ -70,22 +70,5 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidFollow(incoming());
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
-
-    // --- Downloads Collection ---
-    match /downloads/{downloadId} {
-      function isValidDownload(data) {
-        return data.keys().hasAll(['userId', 'trackId', 'trackTitle', 'trackArtist', 'trackThumbnail', 'createdAt'])
-          && data.keys().size() == 6
-          && data.userId == request.auth.uid
-          && data.trackId is string
-          && data.trackId.size() <= 128
-          && data.createdAt == request.time;
-      }
-
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidDownload(incoming());
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-    }
   }
 }

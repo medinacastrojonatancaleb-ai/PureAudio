@@ -35,20 +35,6 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "When the follow was created" }
       },
       "required": ["userId", "artistName", "createdAt"]
-    },
-    "Download": {
-      "title": "Download",
-      "description": "Represents a track downloaded by a user",
-      "type": "object",
-      "properties": {
-        "userId": { "type": "string", "description": "The ID of the user" },
-        "trackId": { "type": "string", "description": "The YouTube video ID" },
-        "trackTitle": { "type": "string", "description": "The title of the track" },
-        "trackArtist": { "type": "string", "description": "The artist of the track" },
-        "trackThumbnail": { "type": "string", "description": "The thumbnail of the track" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "When the download record was created" }
-      },
-      "required": ["userId", "trackId", "createdAt"]
     }
   },
   "firestore": {
@@ -63,10 +49,6 @@
     "/artistFollows/{followId}": {
       "schema": "ArtistFollow",
       "description": "Collection of artist follows"
-    },
-    "/downloads/{downloadId}": {
-      "schema": "Download",
-      "description": "Collection of user downloads"
     }
   }
 }

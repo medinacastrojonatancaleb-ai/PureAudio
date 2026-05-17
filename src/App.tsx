@@ -53,12 +53,6 @@ function AppContent() {
     getLikeCount,
     followedArtists,
     toggleFollowArtist,
-    isPremium,
-    togglePremium,
-    isHighQuality,
-    toggleHighQuality,
-    downloadTrack,
-    downloadedTracks,
     notification,
     notify,
     queue,
@@ -145,7 +139,6 @@ function AppContent() {
   };
 
   const isLiked = currentTrack ? likedTracks.some(t => t.id === currentTrack.id) : false;
-  const isDownloaded = currentTrack ? downloadedTracks.some(t => t.id === currentTrack.id) : false;
 
   return (
     <div className="flex h-screen bg-[#000000] text-white overflow-hidden font-sans select-none">
@@ -277,16 +270,8 @@ function AppContent() {
              {!user ? (
               <button 
                 onClick={login}
-                className="flex items-center gap-2 bg-white text-black text-sm font-black px-5 py-2 rounded-full hover:scale-105 active:scale-95 transition-all shadow-lg group"
+                className="bg-white text-black text-sm font-black px-6 py-2 rounded-full hover:scale-105 active:scale-95 transition-all shadow-lg"
               >
-                <div className="w-5 h-5 flex items-center justify-center">
-                  <svg viewBox="0 0 24 24" className="w-full h-full">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                  </svg>
-                </div>
                 {t('log_in')}
               </button>
             ) : (
@@ -304,11 +289,6 @@ function AppContent() {
                 <span className="text-xs font-bold text-white truncate max-w-[100px]">
                   {user.displayName || 'User'}
                 </span>
-                {isPremium && (
-                  <div className="ml-2 px-1.5 py-0.5 rounded-sm bg-primary text-[8px] font-black text-black leading-none">
-                    {t('premium_badge')}
-                  </div>
-                )}
               </button>
             )}
           </div>
@@ -316,24 +296,6 @@ function AppContent() {
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto pt-20 px-6 pb-24 scrollbar-hide">
-          {!isPremium && (
-            <div className="mb-8 p-3 rounded-xl bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-500/20 flex items-center justify-between gap-4 animate-pulse">
-               <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
-                     <VolumeX size={18} />
-                  </div>
-                  <p className="text-[10px] md:text-xs font-bold text-blue-200">
-                    Get PureAudio Premium to listen without interruptions.
-                  </p>
-               </div>
-               <button 
-                 onClick={togglePremium}
-                 className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline"
-               >
-                 Upgrade
-               </button>
-            </div>
-          )}
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -419,9 +381,6 @@ function AppContent() {
                   <p className="font-bold text-sm truncate hover:underline">{currentTrack.title}</p>
                   <div className="flex items-center gap-2">
                     <p className="text-xs text-gray-400 truncate hover:underline">{currentTrack.artist}</p>
-                    {isHighQuality && (
-                      <span className="text-[8px] font-black border border-primary/40 text-primary/80 px-1 rounded-sm leading-none flex-shrink-0">HQ</span>
-                    )}
                     {(() => {
                       const isFollowing = followedArtists.some(a => a.name === currentTrack.artist);
                       return (
@@ -765,25 +724,13 @@ function AppContent() {
                     </div>
 
                     <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                      <div className="flex items-center gap-2">
-                        <button 
-                           onClick={() => toggleLike(currentTrack)}
-                           className={`flex items-center gap-2 px-6 py-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors ${isLiked ? 'text-primary' : 'text-gray-400'}`}
-                         >
-                          <Heart size={24} fill={isLiked ? "currentColor" : "none"} />
-                          <span className="font-bold text-white">{t('save_liked')}</span>
-                        </button>
-                        <button 
-                           onClick={() => downloadTrack(currentTrack)}
-                           className={`flex items-center gap-2 px-6 py-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors ${isDownloaded ? 'text-primary' : 'text-gray-400'}`}
-                           title={isDownloaded ? t('remove_download') : t('offline_play')}
-                         >
-                          <div className={`relative ${isDownloaded ? 'text-primary' : ''}`}>
-                             <ChevronDown size={24} className="rotate-180" />
-                             <div className="absolute inset-x-0 bottom-1 h-0.5 bg-current mx-1 rounded-full" />
-                          </div>
-                        </button>
-                      </div>
+                      <button 
+                         onClick={() => toggleLike(currentTrack)}
+                         className={`flex items-center gap-2 px-6 py-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors ${isLiked ? 'text-primary' : 'text-gray-400'}`}
+                       >
+                        <Heart size={24} fill={isLiked ? "currentColor" : "none"} />
+                        <span className="font-bold text-white">{t('save_liked')}</span>
+                      </button>
                       <div className="flex items-center gap-2">
                         <button 
                           onClick={() => showLyrics ? setShowLyrics(false) : fetchLyrics()}

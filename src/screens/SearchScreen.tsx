@@ -25,9 +25,6 @@ export default function SearchScreen() {
     likedTracks, 
     followedArtists, 
     toggleFollowArtist,
-    isPremium,
-    downloadTrack,
-    downloadedTracks,
     t
   } = usePlayer();
 
@@ -120,7 +117,6 @@ export default function SearchScreen() {
           >
             {results.map((track) => {
               const isLiked = likedTracks.some(t => t.id === track.id);
-              const isDownloaded = downloadedTracks.some(t => t.id === track.id);
               const isFollowing = followedArtists.some(a => a.name === track.artist);
               return (
                 <motion.div 
@@ -161,17 +157,6 @@ export default function SearchScreen() {
                   >
                     <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
                   </button>
-                  {isPremium && (
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); downloadTrack(track); }}
-                      className={`p-2 transition-colors opacity-0 group-hover:opacity-100 ${isDownloaded ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
-                    >
-                      <div className="relative">
-                        <ChevronDown size={18} className="rotate-180" />
-                        <div className="absolute inset-x-0 bottom-0.5 h-0.5 bg-current mx-0.5 rounded-full" />
-                      </div>
-                    </button>
-                  )}
                 </motion.div>
               );
             })}
