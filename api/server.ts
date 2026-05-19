@@ -39,6 +39,29 @@ export async function createServer() {
     }
   });
 
+  // Fallback generation helper to ensure 100% availability and bypass "high demand" errors.
+  async function generateWithFallback(params: any) {
+    const models = ["gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-3-flash-preview"];
+    let lastError = null;
+    for (const model of models) {
+      try {
+        console.log(`[Server] Trying generative AI model: ${model}`);
+        const response = await genAI.models.generateContent({
+          ...params,
+          model,
+        });
+        if (response && response.text) {
+          console.log(`[Server] Model ${model} succeeded!`);
+          return response;
+        }
+      } catch (err: any) {
+        console.warn(`[Server] Model ${model} failed:`, err.message || err);
+        lastError = err;
+      }
+    }
+    throw lastError || new Error("All Gemini models failed.");
+  }
+
   app.use(express.json());
 
   // Simple CORS
@@ -67,7 +90,7 @@ export async function createServer() {
       if (!geminiKey) {
         return res.status(503).json({ error: "AI features are currently unavailable (Missing API Key)" });
       }
-      const response = await genAI.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
+      const response = await generateWithFallback({
         contents: [{ role: 'user', parts: [{ text: `Act as a professional and responsible music curator. 
         User is ${age ? age + " years old" : "an adult"}.
         Based on the following mood or description: "${prompt}", suggest 8 real songs that fit perfectly.
@@ -84,12 +107,12 @@ export async function createServer() {
             { "title": "Song Title", "artist": "Artist Name" }
           ]
         }`}]}],
-        generationConfig: {
+        config: {
           responseMimeType: "application/json"
         }
       });
 
-      const text = response.response.text();
+      const text = response.text;
       if (!text) throw new Error("Empty response from AI");
       
       const aiData = JSON.parse(text);
@@ -132,7 +155,8 @@ export async function createServer() {
       if (!geminiKey) {
         return res.json({ lyrics: "AI Features disabled. Please set GEMINI_API_KEY." });
       }
-      const response = await genAI.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent(`Find or provide the full lyrics for the song "${title}" by "${artist}". 
+      const response = await generateWithFallback({
+        contents: `Find or provide the full lyrics for the song "${title}" by "${artist}". 
 
         SAFETY POLICY:
         - If the lyrics contain highly explicit sexual content or extreme hate speech, return "Content unavailable due to safety policy."
@@ -140,9 +164,10 @@ export async function createServer() {
         
         If you can provide timestamps (LRC format style, e.g. [00:12.34]Lyric line), that would be amazing. 
         If not, just return the plain text lyrics. 
-        Format the response as a clean string. Do not include extra commentary, just the lyrics.`);
+        Format the response as a clean string. Do not include extra commentary, just the lyrics.`
+      });
 
-      const lyrics = response.response.text()?.trim() || "No lyrics found.";
+      const lyrics = response.text?.trim() || "No lyrics found.";
       res.json({ lyrics });
     } catch (error) {
       console.error("[Server] Lyrics error:", error);
@@ -302,7 +327,7 @@ export async function createServer() {
     const distPath = path.join(process.cwd(), 'dist');
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
-      app.get('*', (req, res) => {
+      app.get('*all', (req, res) => {
         res.sendFile(path.join(distPath, 'index.html'));
       });
     }

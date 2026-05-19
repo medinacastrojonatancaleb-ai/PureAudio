@@ -59,9 +59,12 @@ service cloud.firestore {
     // --- Artist Follows ---
     match /artistFollows/{followId} {
       function isValidFollow(data) {
-        return data.keys().hasAll(['userId', 'artistName', 'createdAt'])
+        return data.keys().hasAll(['userId', 'artistId', 'artistName', 'artistThumbnail', 'createdAt'])
+          && data.keys().size() == 5
           && data.userId == request.auth.uid
+          && data.artistId is string
           && data.artistName is string
+          && data.artistThumbnail is string
           && data.createdAt == request.time;
       }
 

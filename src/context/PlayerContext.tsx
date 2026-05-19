@@ -500,11 +500,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = async () => {
-    await signInWithGoogle();
+    try {
+      await signInWithGoogle();
+      notify('¡Sesión iniciada con éxito!', 'success');
+    } catch (e: any) {
+      console.error('Login error:', e);
+      notify('Error al iniciar sesión con Google.', 'info');
+    }
   };
 
   const logout = async () => {
-    await auth.signOut();
+    try {
+      await auth.signOut();
+      notify('Sesión cerrada correctamente.', 'info');
+    } catch (e: any) {
+      console.error('Logout error:', e);
+    }
   };
 
   return (
