@@ -231,34 +231,34 @@ export default function LibraryScreen() {
               <motion.div 
                 whileTap={{ scale: 0.98 }}
                 key={track.id} 
-                className="flex items-center gap-4 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-all group border border-white/[0.02]"
+                className="flex items-center gap-4 p-2.5 rounded-xl bg-surface/40 hover:bg-surfaceVariant/60 border border-outline/35 transition-all group shadow-sm"
               >
                 <div 
                   onClick={() => playTrack(track, likedTracks)}
-                  className="relative w-12 h-12 flex-shrink-0 cursor-pointer"
+                  className="relative w-12 h-12 flex-shrink-0 cursor-pointer overflow-hidden rounded-lg shadow-md"
                 >
-                  <img src={track.thumbnail} alt={track.title} className="w-full h-full rounded shadow-md object-cover" />
+                  <img src={track.thumbnail} alt={track.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <Play size={16} className="text-white fill-white" />
+                    <Play size={16} fill="white" className="text-white ml-0.5" />
                   </div>
                 </div>
-                <div className="flex-1 overflow-hidden" onClick={() => playTrack(track, likedTracks)}>
-                  <h3 className="font-bold text-sm truncate leading-tight group-hover:text-primary transition-colors">{track.title}</h3>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">{track.artist}</p>
+                <div className="flex-1 overflow-hidden cursor-pointer" onClick={() => playTrack(track, likedTracks)}>
+                  <h3 className="font-bold text-sm truncate leading-tight text-white group-hover:text-primary transition-colors">{track.title}</h3>
+                  <p className="text-xs text-onSurfaceVariant/60 truncate mt-0.5 font-medium">{track.artist}</p>
                 </div>
                 <button 
                   onClick={() => toggleLike(track)}
-                  className="p-2 text-gray-500 hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
+                  className="p-2 text-onSurfaceVariant/40 hover:text-primary transition-colors hover:bg-primary/5 rounded-full"
                 >
-                  <Trash2 size={18} />
+                  <Trash2 size={16} />
                 </button>
               </motion.div>
             ))}
           </div>
         ) : (
-          <div className="py-20 flex flex-col items-center justify-center gap-6 bg-white/[0.02] rounded-2xl border-2 border-dashed border-white/5">
-            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
-               <Heart size={32} className="text-gray-700" />
+          <div className="py-20 flex flex-col items-center justify-center gap-6 bg-surface/30 rounded-2xl border-2 border-dashed border-outline/40">
+            <div className="w-16 h-16 rounded-full bg-surfaceVariant/60 border border-outline/20 flex items-center justify-center text-onSurfaceVariant/60">
+               <Heart size={32} />
             </div>
             <div className="text-center">
                <p className="text-lg font-bold text-white">{t('songs_appear_here')}</p>

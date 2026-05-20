@@ -3,6 +3,7 @@ import { Play, Music2, UserPlus, UserCheck, Sparkles, Wand2, ArrowRight } from '
 import { motion, AnimatePresence } from 'motion/react';
 import { usePlayer } from '../context/PlayerContext';
 import { youtubeService, YouTubeTrack } from '../services/youtubeService';
+import { AudioTrackGridCard } from '../components/AestheticEnhancements';
 
 export default function HomeScreen() {
   const { 
@@ -10,6 +11,8 @@ export default function HomeScreen() {
     currentTrack, 
     followedArtists, 
     toggleFollowArtist,
+    likedTracks,
+    toggleLike,
     t
   } = usePlayer();
   const [activeCategory, setActiveCategory] = useState('All');
@@ -306,18 +309,20 @@ export default function HomeScreen() {
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sections.greeting.map((song) => (
             <motion.div 
-              whileHover={{ scale: 1.02, backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
+              whileHover={{ scale: 1.02, backgroundColor: 'var(--color-surfaceVariant)' }}
               whileTap={{ scale: 0.98 }}
               key={`greeting-${song.id}`}
               onClick={() => playTrack(song, allTracks)}
-              className={`flex items-center gap-4 bg-white/5 transition-colors rounded-lg overflow-hidden group cursor-pointer h-20 shadow-lg border border-white/[0.03] ${currentTrack?.id === song.id ? 'bg-white/10 ring-1 ring-primary/20' : ''}`}
+              className={`flex items-center gap-4 bg-surface/40 hover:bg-surfaceVariant/60 border border-outline/35 transition-all rounded-xl overflow-hidden group cursor-pointer h-20 shadow-lg ${
+                currentTrack?.id === song.id ? 'bg-surfaceVariant border-primary/30 shadow-[0_4px_20px_rgb(0,223,130,0.05)]' : ''
+              }`}
             >
               <div className="w-20 h-20 flex-shrink-0 relative">
-                <img src={song.thumbnail} alt="" className="w-full h-full object-cover shadow-2xl" />
-                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
+                <img src={song.thumbnail} alt="" className="w-full h-full object-cover shadow-xl" referrerPolicy="no-referrer" />
+                <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors" />
               </div>
               <div className="flex-1 min-w-0 pr-4">
-                <h3 className={`font-bold text-base truncate ${currentTrack?.id === song.id ? 'text-primary' : ''}`}>{song.title}</h3>
+                <h3 className={`font-black text-sm md:text-base truncate ${currentTrack?.id === song.id ? 'text-primary' : 'text-white'}`}>{song.title}</h3>
               </div>
               <div className={`pr-4 ${currentTrack?.id === song.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-all transform translate-x-2 group-hover:translate-x-0`}>
                  <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-black shadow-primary/20 shadow-xl scale-90 group-hover:scale-100 transition-transform">
@@ -336,47 +341,21 @@ export default function HomeScreen() {
             <h2 className="text-2xl font-black tracking-tight">{t('jump_back_in')}</h2>
             <button className="text-gray-400 text-xs font-bold uppercase tracking-widest hover:underline">{t('show_all')}</button>
           </div>
-          <div className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide -mx-4 md:-mx-6 px-4 md:px-6">
+          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 md:-mx-6 px-4 md:px-6">
             {sections.trending.map((song) => (
-              <motion.div 
-                whileHover={{ y: -4, backgroundColor: 'rgba(255, 255, 255, 0.08)' }}
-                key={`jump-${song.id}`} 
-                onClick={() => playTrack(song, allTracks)}
-                className={`min-w-[180px] w-44 space-y-4 p-4 rounded-xl bg-white/[0.03] transition-all cursor-pointer group border border-white/[0.02] ${currentTrack?.id === song.id ? 'bg-white/10 ring-1 ring-primary/10' : ''}`}
-              >
-                <div className="relative aspect-square rounded-lg overflow-hidden shadow-2xl">
-                  <img src={song.thumbnail} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  <div className={`absolute bottom-3 right-3 ${currentTrack?.id === song.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-all transform translate-y-2 group-hover:translate-y-0 shadow-2xl`}>
-                     <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-black">
-                        <Play size={20} fill="currentColor" />
-                     </div>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <h3 className={`font-bold text-sm truncate leading-tight ${currentTrack?.id === song.id ? 'text-primary' : ''}`}>{song.title}</h3>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-gray-500 font-medium truncate flex-1">{song.artist}</p>
-                    {(() => {
-                      const isFollowing = followedArtists.some(a => a.name === song.artist);
-                      return (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFollowArtist({
-                              id: '',
-                              name: song.artist,
-                              thumbnail: song.thumbnail
-                            });
-                          }}
-                          className={`flex items-center gap-1 text-[10px] uppercase font-black transition-colors ${isFollowing ? 'text-primary' : 'text-gray-600 hover:text-white'}`}
-                        >
-                          {isFollowing ? <UserCheck size={12} /> : <UserPlus size={12} />}
-                        </button>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </motion.div>
+              <div key={`jump-${song.id}`} className="min-w-[170px] sm:min-w-[190px] w-44 sm:w-48 flex-shrink-0">
+                <AudioTrackGridCard 
+                  track={song}
+                  isActive={currentTrack?.id === song.id}
+                  onPlay={() => playTrack(song, allTracks)}
+                  onLikeToggle={(e) => {
+                    e.stopPropagation();
+                    toggleLike(song);
+                  }}
+                  isLiked={likedTracks.some(t => t.id === song.id)}
+                  t={t}
+                />
+              </div>
             ))}
           </div>
         </section>
@@ -389,20 +368,20 @@ export default function HomeScreen() {
             <h2 className="text-2xl font-black tracking-tight">{t('mood')}</h2>
             <button className="text-gray-400 text-xs font-bold uppercase tracking-widest hover:underline">{t('show_all')}</button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
             {sections.mood.map((song) => (
-              <motion.div 
-                whileTap={{ scale: 0.98 }}
-                key={`mood-${song.id}`} 
-                onClick={() => playTrack(song, allTracks)}
-                className="space-y-3 cursor-pointer group"
-              >
-                <div className="relative aspect-square rounded-sm overflow-hidden shadow-lg group-hover:shadow-primary/5 transition-all">
-                  <img src={song.thumbnail} alt="" className="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 transition-all duration-700" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-                </div>
-                <h3 className="font-black text-sm text-center tracking-tight truncate">{song.title}</h3>
-              </motion.div>
+              <AudioTrackGridCard 
+                key={`mood-${song.id}`}
+                track={song}
+                isActive={currentTrack?.id === song.id}
+                onPlay={() => playTrack(song, allTracks)}
+                onLikeToggle={(e) => {
+                  e.stopPropagation();
+                  toggleLike(song);
+                }}
+                isLiked={likedTracks.some(t => t.id === song.id)}
+                t={t}
+              />
             ))}
           </div>
         </section>

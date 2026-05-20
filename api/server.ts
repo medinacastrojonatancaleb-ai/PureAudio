@@ -298,11 +298,11 @@ export async function createServer() {
       res.json({
         lyrics: `[00:01.00] 🎵 Escuchando la melodía de "${title}" por "${artist}" 🎵
 [00:08.00] 
-[00:10.00] Vaya, PureAudio AI está experimentando una alta demanda espacial en este momento...
+[00:10.00] Vaya, VibeSonic AI está experimentando una alta demanda espacial en este momento...
 [00:15.00] ¡Las letras completas fueron sincronizadas satisfactoriamente con la señal de voz!
 [00:20.50] Siente el sonido en alta definición de este temazo.
 [00:27.00] 
-[00:32.00] Disfruta la música con PureAudio Premium 🎧`
+[00:32.00] Disfruta la música con VibeSonic Premium 🎧`
       });
     }
   });

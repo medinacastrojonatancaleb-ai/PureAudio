@@ -12,6 +12,10 @@ import { usePlayer } from './context/PlayerContext';
 import YouTubePlayer from './components/YouTubePlayer';
 import { youtubeService } from './services/youtubeService';
 import AuthModal from './components/AuthModal';
+import { WaveformVisualizer, RotatingVinyl } from './components/AestheticEnhancements';
+import { aiHealerService } from './services/AiHealerService';
+import AiHealerCockpit from './components/AiHealerCockpit';
+import { ShieldAlert, Cpu, Sparkles } from 'lucide-react';
 
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -64,6 +68,8 @@ function AppContent() {
     setAuthModalOpen
   } = usePlayer();
 
+  const [isHealerCockpitOpen, setIsHealerCockpitOpen] = useState(false);
+
   const fetchLyrics = async () => {
     if (!currentTrack) return;
     setIsLoadingLyrics(true);
@@ -107,27 +113,38 @@ function AppContent() {
   const handlePlayerError = async (code: number) => {
     console.error('Player error code:', code);
     
-    // Error 150/101 are the main "restricted" errors
+    // Deploy AI Sentinel healing response
+    const errorDetails = `YouTube playback returned status code ${code} for track "${currentTrack?.title || 'Unknown'}" by ${currentTrack?.artist || 'Unknown'}`;
+    const wasHealed = await aiHealerService.healActivePlayback(
+      {
+        currentTrack,
+        playTrack: (track) => playTrack(track, queue),
+        nextTrack,
+        notify: (msg, type) => notify(msg, type)
+      },
+      errorDetails
+    );
+
+    if (wasHealed) {
+      console.log('[AI Sentinel] Automatic playback anomaly self-healing process complete.');
+      return;
+    }
+
+    // Classic fallback if healer wasn't active
     if ([101, 150].includes(code) && currentTrack) {
       console.warn(`Track ${currentTrack.title} is restricted. Searching for alternative...`);
       try {
         const results = await youtubeService.search(`${currentTrack.title} ${currentTrack.artist} topic`);
-        // Filter out the current restricted ID
         const alternative = results.find(t => t.id !== currentTrack.id);
         if (alternative) {
-           console.log('Found alternative track:', alternative.title, alternative.id);
-           // When playing an alternative, keep the current queue
            playTrack(alternative, queue);
            return;
         }
       } catch (e) {
         console.error('Fallback search failed:', e);
       }
-      
-      // If no alternative found, just skip
       nextTrack();
     } else if ([2, 5, 100].includes(code)) {
-      console.warn('Playing next track due to playback error:', code);
       setTimeout(() => nextTrack(), 1000); 
     }
   };
@@ -151,7 +168,7 @@ function AppContent() {
           <div className="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
              <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-lg shadow-primary/40 animate-pulse" />
           </div>
-          <span className="font-extrabold text-2xl text-white tracking-tight">Wave</span>
+          <span className="font-black text-2xl bg-gradient-to-r from-primary via-[#00eae6] to-[#00abff] bg-clip-text text-transparent tracking-tighter">VibeSonic</span>
         </div>
 
         <nav className="p-6 space-y-4">
@@ -168,6 +185,29 @@ function AppContent() {
             label={t('search')} 
           />
         </nav>
+
+        {/* AI Sentinel Controller Console Option */}
+        <div className="px-6 pb-2">
+          <button
+            onClick={() => setIsHealerCockpitOpen(true)}
+            className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-primary/5 hover:bg-primary/10 border border-primary/20 hover:border-primary/40 transition-all text-left group relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-16 h-16 bg-primary/5 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl text-primary animate-pulse flex-shrink-0">
+                <Cpu size={18} />
+              </div>
+              <div>
+                <p className="text-xs font-black text-white hover:text-primary transition-colors tracking-tight">Sentinel AI</p>
+                <p className="text-[10px] text-gray-400 font-medium font-sans">Automated Self-Healer</p>
+              </div>
+            </div>
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </span>
+          </button>
+        </div>
 
         <div className="flex-1 overflow-hidden flex flex-col px-6">
            <header className="flex items-center justify-between mb-4 mt-2">
@@ -255,11 +295,32 @@ function AppContent() {
         </AnimatePresence>
 
         <header className="p-4 flex items-center justify-between z-20 absolute top-0 left-0 right-0 bg-gradient-to-b from-background/70 to-transparent">
-          <div className="flex items-center gap-2 md:hidden">
-             <div className="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
-                <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-lg shadow-primary/40 animate-pulse" />
-             </div>
-             <span className="font-black text-xl tracking-tight">Wave</span>
+          <div className="flex items-center gap-2.5 md:hidden">
+             {currentTrack?.thumbnail ? (
+               <motion.div 
+                 animate={{ rotate: isPlaying ? 360 : 0 }}
+                 transition={{ repeat: Infinity, duration: 10, ease: 'linear' }}
+                 className="w-7 h-7 rounded-full overflow-hidden shadow-lg border border-primary/40 flex-shrink-0 cursor-pointer ring-2 ring-primary/25"
+                 onClick={() => setIsExpanded(true)}
+               >
+                 <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+               </motion.div>
+             ) : (
+               <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
+                  <div className="w-3 h-3 rounded-full bg-primary shadow-lg shadow-primary/40 animate-pulse" />
+               </div>
+             )}
+             <span onClick={() => currentTrack && setIsExpanded(true)} className="font-black text-xl bg-gradient-to-r from-primary via-[#00eae6] to-[#00abff] bg-clip-text text-transparent tracking-tighter cursor-pointer">VibeSonic</span>
+             
+             {/* Dynamic Sentinel AI operating node on cellular */}
+             <button
+               onClick={() => setIsHealerCockpitOpen(true)}
+               className="p-1 px-2 rounded-full bg-primary/10 border border-primary/20 text-primary animate-pulse flex items-center gap-1 text-[9px] font-black uppercase font-mono tracking-tight"
+               title="AI Code Sentinel Status"
+             >
+               <Cpu size={11} className="animate-spin" style={{ animationDuration: '6s' }} />
+               <span>IA Sentinel</span>
+             </button>
           </div>
 
           <div className="flex items-center gap-3 ml-auto">
@@ -520,7 +581,7 @@ function AppContent() {
   </AnimatePresence>
 
       {/* Bottom Nav (Mobile Only) */}
-      <nav className="md:hidden bg-black/80 backdrop-blur-2xl border-t border-white/5 h-20 flex items-center justify-around px-4 z-40 fixed bottom-0 left-0 right-0">
+      <nav className="md:hidden bg-surface/90 backdrop-blur-2xl border-t border-outline/30 h-20 flex items-center justify-around px-4 z-40 fixed bottom-0 left-0 right-0">
         <NavButton 
           active={activeTab === 'home'} 
           onClick={() => setActiveTab('home')} 
@@ -560,25 +621,23 @@ function AppContent() {
               />
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/40 to-black" />
             </div>
-
-            <div className="relative z-10 flex flex-col h-full p-8 md:p-12 max-w-7xl mx-auto w-full">
-              <header className="flex justify-between items-center mb-8 md:mb-12">
+            <div className="relative z-10 flex flex-col h-screen md:h-full justify-between p-4 xs:p-6 md:py-6 md:px-12 lg:p-12 max-w-7xl mx-auto w-full overflow-hidden select-none">
+              <header className="flex justify-between items-center mb-2 xs:mb-4 md:mb-6 lg:mb-12 flex-shrink-0">
                 <button 
                   onClick={() => setIsExpanded(false)}
-                  className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                  className="w-10 h-10 xs:w-12 xs:h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
                 >
-                  <ChevronDown size={28} />
+                  <ChevronDown size={24} />
                 </button>
                 <div className="text-center">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 font-bold mb-1">Playing from</p>
-                  <p className="font-bold text-sm">{t('now_playing')}</p>
+                  <p className="text-[9px] uppercase tracking-[0.2em] text-gray-400 font-bold mb-0.5">Playing from</p>
+                  <p className="font-bold text-xs xs:text-sm">{t('now_playing')}</p>
                 </div>
-                <button className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
-                  <MoreHorizontal size={24} />
+                <button className="w-10 h-10 xs:w-12 xs:h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                  <MoreHorizontal size={20} />
                 </button>
               </header>
-  
-              <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-12 md:gap-24 overflow-y-auto scrollbar-hide py-8">
+              <div className="flex-1 flex flex-col md:flex-row items-center justify-between md:justify-center gap-4 sm:gap-8 md:gap-12 lg:gap-24 overflow-hidden py-3 xs:py-5 sm:py-6 w-full">
                 {/* Album Art Section or Lyrics */}
                 <AnimatePresence mode="wait">
                   {!showLyrics ? (
@@ -588,27 +647,9 @@ function AppContent() {
                       initial={{ scale: 0.9, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.9, opacity: 0 }}
-                      className="w-full max-w-[320px] md:max-w-[450px] aspect-square rounded-2xl md:rounded-[32px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] ring-1 ring-white/10 flex-shrink-0 relative group"
+                      className="w-full max-w-[245px] xs:max-w-[295px] sm:max-w-[340px] md:max-w-[330px] lg:max-w-[400px] xl:max-w-[420px] aspect-square flex-shrink-0 relative group flex items-center justify-center mx-auto"
                     >
-                      <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" />
-                      
-                      {/* Visualizer Overlay */}
-                      {isPlaying && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                          <div className="flex items-center justify-center gap-1 h-12">
-                            {[...Array(5)].map((_, i) => (
-                              <div 
-                                key={i}
-                                className="w-1 bg-primary rounded-full animate-visualizer"
-                                style={{ 
-                                  animationDelay: `${i * 0.18}s`,
-                                  boxShadow: '0 0 8px rgba(29, 185, 84, 0.4)'
-                                }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      <RotatingVinyl isPlaying={isPlaying} thumbnail={currentTrack.thumbnail} />
                     </motion.div>
                   ) : (
                     <motion.div 
@@ -616,67 +657,72 @@ function AppContent() {
                       initial={{ y: 50, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
                       exit={{ y: 50, opacity: 0 }}
-                      className="w-full max-w-2xl h-[400px] md:h-full overflow-y-auto scrollbar-hide py-8 flex flex-col items-center"
+                      className="w-full max-w-2xl h-[300px] md:h-full overflow-y-auto scrollbar-hide py-4 flex flex-col items-center"
                     >
                       {isLoadingLyrics ? (
-                        <div className="flex flex-col items-center gap-4 mt-20">
+                        <div className="flex flex-col items-center gap-4 mt-10">
                           <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                          <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">{t('summoning_lyrics')}</p>
+                           <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">{t('summoning_lyrics')}</p>
                         </div>
                       ) : (
-                        <div className="text-center space-y-6">
-                           <p className="text-2xl md:text-3xl font-black text-white/90 leading-relaxed whitespace-pre-wrap">
+                        <div className="text-center space-y-4">
+                           <p className="text-xl md:text-3xl font-black text-white/90 leading-relaxed whitespace-pre-wrap">
                              {lyrics || t('no_lyrics')}
                            </p>
-                           <p className="text-xs text-gray-500 italic pb-20">{t('lyrics_by')}</p>
+                           <p className="text-[10px] text-gray-500 italic pb-10">{t('lyrics_by')}</p>
                         </div>
                       )}
                     </motion.div>
                   )}
                 </AnimatePresence>
-  
+   
                 {/* Control Center Section */}
-                <div className="w-full max-w-[450px] flex flex-col gap-8 md:gap-12 flex-1">
-                  <div className="space-y-2 text-center md:text-left">
+                <div className="w-full max-w-[450px] flex flex-col justify-between flex-grow flex-1 md:justify-center md:gap-6 lg:gap-8 overflow-hidden md:overflow-visible py-2 xs:py-4">
+                  <div className="space-y-1 text-center md:text-left select-none flex-shrink-0">
                     <motion.h1 
                       initial={{ y: 20, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
-                      className="text-4xl md:text-6xl font-black tracking-tighter line-clamp-2"
+                      className="text-lg xs:text-2xl md:text-4xl lg:text-5xl font-black tracking-tight line-clamp-1 md:line-clamp-2"
                     >
                       {currentTrack.title}
                     </motion.h1>
-                           <div className="flex flex-col items-center md:items-start">
-                             <motion.p 
-                               initial={{ y: 20, opacity: 0 }}
-                               animate={{ y: 0, opacity: 1 }}
-                               transition={{ delay: 0.1 }}
-                               className="text-xl md:text-2xl text-primary font-bold truncate"
-                             >
-                               {currentTrack.artist}
-                             </motion.p>
-                             <button 
-                               onClick={() => toggleFollowArtist({
-                                 id: '',
-                                 name: currentTrack.artist,
-                                 thumbnail: currentTrack.thumbnail
-                               })}
-                               className={`mt-2 flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold transition-all ${
-                                 followedArtists.some(a => a.name === currentTrack.artist)
-                                   ? 'bg-primary border-primary text-black' 
-                                   : 'bg-transparent border-white/20 text-white hover:border-white'
-                               }`}
-                             >
-                               {followedArtists.some(a => a.name === currentTrack.artist) ? (
-                                 <><UserCheck size={14} /> {t('following')}</>
-                               ) : (
-                                 <><UserPlus size={14} /> {t('follow_artist')}</>
-                               )}
-                             </button>
-                           </div>
+                    <div className="flex flex-col items-center md:items-start select-none">
+                      <motion.p 
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.1 }}
+                        className="text-xs xs:text-sm md:text-xl text-primary font-bold truncate max-w-full"
+                      >
+                        {currentTrack.artist}
+                      </motion.p>
+                      <button 
+                        onClick={() => toggleFollowArtist({
+                          id: '',
+                          name: currentTrack.artist,
+                          thumbnail: currentTrack.thumbnail
+                        })}
+                        className={`mt-1 flex items-center gap-1.5 px-3 py-1 rounded-full border text-[9px] xs:text-[10px] font-bold transition-all ${
+                          followedArtists.some(a => a.name === currentTrack.artist)
+                            ? 'bg-primary border-primary text-black' 
+                            : 'bg-transparent border-white/20 text-white hover:border-white'
+                        }`}
+                      >
+                        {followedArtists.some(a => a.name === currentTrack.artist) ? (
+                          <><UserCheck size={11} /> {t('following')}</>
+                        ) : (
+                          <><UserPlus size={11} /> {t('follow_artist')}</>
+                        )}
+                      </button>
+                    </div>
                   </div>
-  
+ 
+                  {/* Waveform Visualizer */}
+                  <div className="w-full h-8 xs:h-11 md:h-12 bg-surface/30 border border-outline/20 rounded-2xl p-1 xs:p-2 backdrop-blur-md flex items-center justify-center relative overflow-hidden flex-shrink-0">
+                    <WaveformVisualizer isPlaying={isPlaying} color="#00df82" height={26} />
+                  </div>
+   
                   {/* Progress Section */}
-                  <div className="w-full space-y-4">
+                  <div className="w-full space-y-1.5 flex-shrink-0">
                     <div className="relative group/progress h-2 flex items-center">
                       <input 
                         type="range"
@@ -687,79 +733,77 @@ function AppContent() {
                         onChange={(e) => seekTo(parseFloat(e.target.value))}
                         className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
                       />
-                      <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-white group-hover/progress:bg-primary transition-colors" 
                           style={{ width: `${progress}%` }} 
                         />
                       </div>
                       <div 
-                        className="absolute w-4 h-4 bg-white rounded-full opacity-0 group-hover/progress:opacity-100 shadow-xl transition-opacity pointer-events-none"
-                        style={{ left: `calc(${progress}% - 8px)` }}
+                        className="absolute w-3 h-3 bg-white rounded-full opacity-0 group-hover/progress:opacity-100 shadow-xl transition-opacity pointer-events-none"
+                        style={{ left: `calc(${progress}% - 6px)` }}
                       />
                     </div>
-                    <div className="flex justify-between text-sm font-bold text-gray-400">
+                    <div className="flex justify-between text-[10px] sm:text-[11px] font-bold text-gray-400">
                       <span>{formatTime(currentTime)}</span>
                       <span>{formatTime(duration)}</span>
                     </div>
                   </div>
-  
-                  {/* Playback Controls */}
-                  <div className="flex flex-col gap-8">
-                    <div className="flex items-center justify-between md:justify-center md:gap-12">
+                    {/* Playback Controls Row */}
+                  <div className="flex items-center justify-between md:justify-center md:gap-12 flex-shrink-0">
+                    <button 
+                      onClick={toggleShuffle}
+                      className={`p-2 transition-colors ${isShuffle ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
+                    >
+                      <Shuffle className="w-5 h-5 xs:w-6 xs:h-6 md:w-7 md:h-7" />
+                    </button>
+                    <button onClick={prevTrack} className="p-2 text-white hover:text-primary transition-colors transform active:scale-90">
+                      <SkipBack className="w-7 h-7 xs:w-8 xs:h-8 md:w-12 md:h-12" fill="currentColor" />
+                    </button>
+                    <button 
+                      onClick={togglePlay}
+                      className="w-12 h-12 xs:w-16 xs:h-16 md:w-24 md:h-24 rounded-full bg-white flex items-center justify-center text-black shadow-2xl hover:scale-105 active:scale-95 transition-all flex-shrink-0"
+                    >
+                      {isPlaying ? <Pause className="w-5 h-5 xs:w-7 xs:h-7 md:w-11 md:h-11" fill="currentColor" /> : <Play className="w-5 h-5 xs:w-7 xs:h-7 md:w-11 md:h-11 ml-0.5 xs:ml-1" fill="currentColor" />}
+                    </button>
+                    <button onClick={nextTrack} className="p-2 text-white hover:text-primary transition-colors transform active:scale-90">
+                      <SkipForward className="w-7 h-7 xs:w-8 xs:h-8 md:w-12 md:h-12" fill="currentColor" />
+                    </button>
+                    <button 
+                      onClick={toggleRepeat}
+                      className={`p-2 transition-colors ${repeatMode !== 'none' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
+                    >
+                      {repeatMode === 'one' ? <Repeat1 className="w-5 h-5 xs:w-6 xs:h-6 md:w-7 md:h-7" /> : <Repeat className="w-5 h-5 xs:w-6 xs:h-6 md:w-7 md:h-7" />}
+                    </button>
+                  </div>
+    
+                  {/* Action Footer Button Row */}
+                  <div className="flex items-center justify-between pt-1.5 xs:pt-2.5 border-t border-white/5 w-full flex-shrink-0">
+                    <button 
+                       onClick={() => toggleLike(currentTrack)}
+                       className={`flex items-center gap-1.5 px-3 py-1.5 xs:py-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors ${isLiked ? 'text-primary' : 'text-gray-400'}`}
+                     >
+                      <Heart className="w-4 h-4 xs:w-5 h-5" fill={isLiked ? "currentColor" : "none"} />
+                      <span className="font-bold text-xs text-white">{t('save_liked')}</span>
+                    </button>
+                    <div className="flex items-center gap-1.5">
                       <button 
-                        onClick={toggleShuffle}
-                        className={`p-2 transition-colors ${isShuffle ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
+                        onClick={() => showLyrics ? setShowLyrics(false) : fetchLyrics()}
+                        className={`p-2 xs:p-3 rounded-full transition-colors ${showLyrics ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white'}`}
+                        title="Lyrics"
                       >
-                        <Shuffle size={28} />
-                      </button>
-                      <button onClick={prevTrack} className="p-2 text-white hover:text-primary transition-colors transform active:scale-90">
-                        <SkipBack size={48} fill="currentColor" />
+                        <Music2 className="w-4 h-4 xs:w-5 xs:h-5" />
                       </button>
                       <button 
-                        onClick={togglePlay}
-                        className="w-20 md:w-24 h-20 md:h-24 rounded-full bg-white flex items-center justify-center text-black shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                        onClick={() => {
+                          const url = `https://www.youtube.com/watch?v=${currentTrack.id}`;
+                          navigator.clipboard.writeText(url);
+                          notify(t('link_copied'), 'info');
+                        }}
+                        className="p-2 xs:p-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
                       >
-                        {isPlaying ? <Pause size={44} fill="currentColor" /> : <Play size={44} fill="currentColor" className="ml-1" />}
+                        <Share2 className="w-4 h-4 xs:w-5 xs:h-5" />
                       </button>
-                      <button onClick={nextTrack} className="p-2 text-white hover:text-primary transition-colors transform active:scale-90">
-                        <SkipForward size={48} fill="currentColor" />
-                      </button>
-                      <button 
-                        onClick={toggleRepeat}
-                        className={`p-2 transition-colors ${repeatMode !== 'none' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
-                      >
-                        {repeatMode === 'one' ? <Repeat1 size={28} /> : <Repeat size={28} />}
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                      <button 
-                         onClick={() => toggleLike(currentTrack)}
-                         className={`flex items-center gap-2 px-6 py-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors ${isLiked ? 'text-primary' : 'text-gray-400'}`}
-                       >
-                        <Heart size={24} fill={isLiked ? "currentColor" : "none"} />
-                        <span className="font-bold text-white">{t('save_liked')}</span>
-                      </button>
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => showLyrics ? setShowLyrics(false) : fetchLyrics()}
-                          className={`p-4 rounded-full transition-colors ${showLyrics ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white'}`}
-                          title="Lyrics"
-                        >
-                          <Music2 size={24} />
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const url = `https://www.youtube.com/watch?v=${currentTrack.id}`;
-                            navigator.clipboard.writeText(url);
-                            notify(t('link_copied'), 'info');
-                          }}
-                          className="p-4 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
-                        >
-                          <Share2 size={24} />
-                        </button>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -771,6 +815,9 @@ function AppContent() {
       
       {/* Auth Modal Component */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />
+
+      {/* Invisible AI Active Code Sentinel dashboard */}
+      <AiHealerCockpit isOpen={isHealerCockpitOpen} onClose={() => setIsHealerCockpitOpen(false)} />
     </div>
   );
 }
