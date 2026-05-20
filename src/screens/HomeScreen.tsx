@@ -142,7 +142,7 @@ export default function HomeScreen() {
   return (
     <div className="space-y-8 pb-10">
       {/* Categories */}
-      <div className="flex gap-2 sticky top-[-20px] bg-[#121212]/80 backdrop-blur-md pt-4 pb-2 z-10 px-1 -mx-1">
+      <div className="flex gap-2 sticky top-[-20px] bg-background/90 backdrop-blur-md pt-4 pb-2 z-10 px-4 md:px-6 -mx-4 md:-mx-6 border-b border-outline/10 overflow-x-auto scrollbar-hide">
         {[
           { id: 'All', label: t('cat_all') },
           { id: 'Music', label: t('cat_music') },
@@ -277,7 +277,7 @@ export default function HomeScreen() {
                       <Play size={10} fill="currentColor" /> {t('play_all')}
                     </button>
                   </div>
-                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
+                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-4 md:-mx-6 px-4 md:px-6">
                     {aiResults.map((song) => (
                       <motion.div 
                         whileHover={{ scale: 1.05 }}
@@ -336,7 +336,7 @@ export default function HomeScreen() {
             <h2 className="text-2xl font-black tracking-tight">{t('jump_back_in')}</h2>
             <button className="text-gray-400 text-xs font-bold uppercase tracking-widest hover:underline">{t('show_all')}</button>
           </div>
-          <div className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2">
+          <div className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide -mx-4 md:-mx-6 px-4 md:px-6">
             {sections.trending.map((song) => (
               <motion.div 
                 whileHover={{ y: -4, backgroundColor: 'rgba(255, 255, 255, 0.08)' }}

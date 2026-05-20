@@ -78,7 +78,10 @@ interface PlayerContextType {
   toggleLike: (track: YouTubeTrack) => Promise<void>;
   getLikeCount: (trackId: string) => number;
   login: () => Promise<void>;
+  loginCustom: (displayName: string, photoURL: string, email?: string) => void;
   logout: () => Promise<void>;
+  isAuthModalOpen: boolean;
+  setAuthModalOpen: (val: boolean) => void;
   queue: YouTubeTrack[];
   followedArtists: Artist[];
   toggleFollowArtist: (artist: Artist) => Promise<void>;
@@ -306,7 +309,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (user.uid === 'guest_user_123') {
+    if (user.uid && user.uid.startsWith('guest_user_')) {
       const guestLikes = localStorage.getItem('pureaudio_guest_likes');
       setLikedTracks(guestLikes ? JSON.parse(guestLikes) : []);
       return;
@@ -336,7 +339,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (user.uid === 'guest_user_123') {
+    if (user.uid && user.uid.startsWith('guest_user_')) {
       const guestArtists = localStorage.getItem('pureaudio_guest_artists');
       setFollowedArtists(guestArtists ? JSON.parse(guestArtists) : []);
       return;
@@ -464,13 +467,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const toggleLike = async (track: YouTubeTrack) => {
     if (!user) {
-      await login();
+      setAuthModalOpen(true);
       return;
     }
 
     const isLiked = likedTracks.some(t => t.id === track.id);
 
-    if (user.uid === 'guest_user_123') {
+    if (user.uid && user.uid.startsWith('guest_user_')) {
       let updatedLikes = [...likedTracks];
       if (isLiked) {
         updatedLikes = updatedLikes.filter(t => t.id !== track.id);
@@ -529,13 +532,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const toggleFollowArtist = async (artist: Artist) => {
     if (!user) {
-      await login();
+      setAuthModalOpen(true);
       return;
     }
 
     const isFollowing = followedArtists.some(a => a.name === artist.name);
 
-    if (user.uid === 'guest_user_123') {
+    if (user.uid && user.uid.startsWith('guest_user_')) {
       let updatedArtists = [...followedArtists];
       if (isFollowing) {
         updatedArtists = updatedArtists.filter(a => a.name !== artist.name);
@@ -579,6 +582,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const [isAuthModalOpen, setAuthModalOpen] = useState(false);
+
+  const loginCustom = (displayName: string, photoURL: string, email?: string) => {
+    const customUser: any = {
+      uid: 'guest_user_' + Math.random().toString(36).substring(2, 11),
+      displayName: displayName || 'Invitado Premium 🎧',
+      email: email || 'invitado@pureaudio.local',
+      photoURL: photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+      isAnonymous: true
+    };
+    setUser(customUser);
+    localStorage.setItem('pureaudio_guest_user', JSON.stringify(customUser));
+    notify(language === 'es' ? '¡Sesión Iniciada con Éxito!' : 'Logged in successfully!', 'success');
+  };
+
   const login = async () => {
     try {
       await signInWithGoogle();
@@ -600,7 +618,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      if (user?.uid === 'guest_user_123') {
+      if (user?.uid && user.uid.startsWith('guest_user_')) {
         localStorage.removeItem('pureaudio_guest_user');
         setUser(null);
         notify('Sesión de Invitado cerrada.', 'info');
@@ -608,6 +626,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
       await auth.signOut();
       localStorage.removeItem('pureaudio_guest_user');
+      setUser(null);
       notify('Sesión cerrada correctamente.', 'info');
     } catch (e: any) {
       console.error('Logout error:', e);
@@ -638,7 +657,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toggleLike,
       getLikeCount,
       login,
+      loginCustom,
       logout,
+      isAuthModalOpen,
+      setAuthModalOpen,
       queue,
       followedArtists,
       toggleFollowArtist,

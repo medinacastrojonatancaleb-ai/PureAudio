@@ -11,6 +11,7 @@ import LibraryScreen from './screens/LibraryScreen';
 import { usePlayer } from './context/PlayerContext';
 import YouTubePlayer from './components/YouTubePlayer';
 import { youtubeService } from './services/youtubeService';
+import AuthModal from './components/AuthModal';
 
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -58,7 +59,9 @@ function AppContent() {
     queue,
     language,
     setLanguage,
-    t
+    t,
+    isAuthModalOpen,
+    setAuthModalOpen
   } = usePlayer();
 
   const fetchLyrics = async () => {
@@ -141,9 +144,16 @@ function AppContent() {
   const isLiked = currentTrack ? likedTracks.some(t => t.id === currentTrack.id) : false;
 
   return (
-    <div className="flex h-screen bg-[#000000] text-white overflow-hidden font-sans select-none">
+    <div className="flex h-screen bg-background text-onBackground overflow-hidden font-sans select-none">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-80 bg-[#121212] m-2 rounded-xl overflow-hidden shadow-2xl">
+      <aside className="hidden md:flex flex-col w-80 bg-surface m-2 rounded-xl border border-outline/30 overflow-hidden shadow-2xl flex-shrink-0">
+        <div className="pt-6 px-6 flex items-center gap-3">
+          <div className="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
+             <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-lg shadow-primary/40 animate-pulse" />
+          </div>
+          <span className="font-extrabold text-2xl text-white tracking-tight">Wave</span>
+        </div>
+
         <nav className="p-6 space-y-4">
           <SidebarNavButton 
             active={activeTab === 'home'} 
@@ -205,7 +215,7 @@ function AppContent() {
                ))}
 
                {likedTracks.length === 0 && followedArtists.length === 0 && (
-                 <div className="p-4 rounded-xl bg-[#242424] space-y-4">
+                 <div className="p-4 rounded-xl bg-surfaceVariant/60 border border-outline/30 space-y-4">
                     <p className="font-bold text-sm">{t('create_playlist')}</p>
                     <p className="text-xs text-gray-400">{t('easy_help')}</p>
                     <button className="bg-white text-black text-xs font-bold px-4 py-2 rounded-full hover:scale-105 transition-transform" onClick={() => setActiveTab('search')}>
@@ -218,13 +228,13 @@ function AppContent() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#121212] md:m-2 md:ml-0 rounded-xl overflow-hidden relative group/content">
+      <div className="flex-1 flex flex-col min-w-0 bg-surface md:m-2 md:ml-0 rounded-xl border border-outline/30 overflow-hidden relative group/content shadow-2xl">
         {/* Dynamic Background Gradient */}
         {currentTrack && (
           <div 
             className="absolute inset-0 z-0 transition-opacity duration-1000 opacity-30 pointer-events-none"
             style={{
-              background: `radial-gradient(circle at 50% 0%, ${'#1DB954'}33 0%, transparent 70%)`
+              background: `radial-gradient(circle at 50% 0%, #00df8244 0%, transparent 75%)`
             }}
           />
         )}
@@ -244,12 +254,12 @@ function AppContent() {
           )}
         </AnimatePresence>
 
-        <header className="p-4 flex items-center justify-between z-20 absolute top-0 left-0 right-0 bg-gradient-to-b from-black/40 to-transparent">
+        <header className="p-4 flex items-center justify-between z-20 absolute top-0 left-0 right-0 bg-gradient-to-b from-background/70 to-transparent">
           <div className="flex items-center gap-2 md:hidden">
-             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-onPrimary">
-                <Music2 size={18} />
+             <div className="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
+                <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-lg shadow-primary/40 animate-pulse" />
              </div>
-             <span className="font-black text-lg">PureAudio</span>
+             <span className="font-black text-xl tracking-tight">Wave</span>
           </div>
 
           <div className="flex items-center gap-3 ml-auto">
@@ -269,7 +279,7 @@ function AppContent() {
              </div>
              {!user ? (
               <button 
-                onClick={login}
+                onClick={() => setAuthModalOpen(true)}
                 className="bg-white text-black text-sm font-black px-6 py-2 rounded-full hover:scale-105 active:scale-95 transition-all shadow-lg"
               >
                 {t('log_in')}
@@ -295,7 +305,7 @@ function AppContent() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto pt-20 px-6 pb-24 scrollbar-hide">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pt-20 px-4 md:px-6 pb-32 scrollbar-hide">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -316,7 +326,7 @@ function AppContent() {
               <motion.div 
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                className="fixed bottom-24 left-2 right-2 bg-[#282828] rounded-xl p-2 flex items-center gap-3 shadow-2xl z-50 border border-white/5"
+                className="fixed bottom-24 left-2 right-2 bg-surfaceVariant/95 backdrop-blur-md rounded-xl p-2 flex items-center gap-3 shadow-2xl z-50 border border-outline/40"
                 onClick={() => setIsExpanded(true)}
               >
                 <div className="w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden bg-primary/10 shadow-inner">
@@ -327,17 +337,17 @@ function AppContent() {
                   )}
                 </div>
                 <div className="flex-1 overflow-hidden">
-                  <p className="text-sm font-bold truncate leading-tight">
+                  <p className="text-sm font-bold truncate leading-tight text-white animate-fade-in">
                     {currentTrack?.title || "Welcome"}
                   </p>
-                  <p className="text-[11px] text-gray-400 truncate uppercase tracking-tight">
+                  <p className="text-[11px] text-onSurfaceVariant truncate uppercase tracking-tight">
                     {currentTrack?.artist || t('tap_to_play')}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 pr-2">
                   <button 
                     onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white"
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-primary"
                   >
                     {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
                   </button>
@@ -363,7 +373,7 @@ function AppContent() {
             initial={{ y: 100 }}
             animate={{ y: 0 }}
             exit={{ y: 100 }}
-            className="hidden md:block fixed bottom-0 left-0 right-0 bg-black border-t border-white/5 h-24 px-4 z-[60]"
+            className="hidden md:block fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-md border-t border-outline/50 h-24 px-4 z-[60]"
           >
             <div className="flex items-center justify-between h-full max-w-[100vw]">
               {/* Left: Info */}
@@ -758,6 +768,9 @@ function AppContent() {
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* Auth Modal Component */}
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />
     </div>
   );
 }

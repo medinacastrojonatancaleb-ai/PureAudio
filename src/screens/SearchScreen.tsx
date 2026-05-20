@@ -65,8 +65,8 @@ export default function SearchScreen() {
   return (
     <div className="space-y-6 pb-20">
       {/* Search Input */}
-      <div className="sticky top-[-20px] bg-black/40 backdrop-blur-md pt-4 pb-4 z-20 -mx-6 px-6">
-        <div className="flex items-center gap-3 bg-[#242424] hover:bg-[#2a2a2a] transition-colors rounded-full px-5 py-3 border border-white/5">
+      <div className="sticky top-[-20px] bg-background/80 backdrop-blur-md pt-4 pb-4 z-20 -mx-4 md:-mx-6 px-4 md:px-6 border-b border-outline/10">
+        <div className="flex items-center gap-3 bg-surfaceVariant/60 hover:bg-surfaceVariant transition-colors rounded-full px-5 py-3 border border-outline/30">
           <Search size={20} className="text-gray-400" />
           <input 
             type="text" 
@@ -113,28 +113,33 @@ export default function SearchScreen() {
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-5"
           >
             {results.map((track) => {
               const isLiked = likedTracks.some(t => t.id === track.id);
               const isFollowing = followedArtists.some(a => a.name === track.artist);
               return (
                 <motion.div 
+                  whileHover={{ y: -6 }}
                   whileTap={{ scale: 0.98 }}
                   key={track.id} 
                   onClick={() => playTrack(track, results)}
-                  className={`flex items-center gap-4 p-2 rounded-lg transition-all cursor-pointer group bg-white/[0.03] hover:bg-white/[0.08] ${currentTrack?.id === track.id ? 'bg-primary/10' : ''}`}
+                  className={`flex flex-col p-3 rounded-[24px] bg-surfaceVariant/30 hover:bg-surfaceVariant/80 border border-outline/30 transition-all cursor-pointer group relative overflow-hidden ${currentTrack?.id === track.id ? 'bg-surfaceVariant border-primary/20 shadow-lg' : ''}`}
                 >
-                  <div className="relative w-12 h-12 flex-shrink-0">
-                    <img src={track.thumbnail} alt={track.title} className="w-full h-full rounded shadow-md object-cover" />
-                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                      <Play size={16} className="text-white fill-white" />
+                  <div className="relative aspect-square w-full rounded-[18px] overflow-hidden mb-3 shadow bg-black/10">
+                    <img src={track.thumbnail} alt={track.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                      <div className="w-11 h-11 bg-primary rounded-full flex items-center justify-center text-black shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+                        <Play size={20} fill="currentColor" className="ml-0.5" />
+                      </div>
                     </div>
                   </div>
-                  <div className="flex-1 overflow-hidden">
-                    <h3 className="font-bold text-sm truncate leading-tight group-hover:text-primary transition-colors">{track.title}</h3>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <p className="text-xs text-gray-400 truncate max-w-[120px]">{track.artist}</p>
+                  <div className="flex-1 flex flex-col justify-between min-w-0">
+                    <div className="space-y-0.5">
+                      <h3 className={`font-bold text-sm truncate leading-snug group-hover:text-primary transition-colors ${currentTrack?.id === track.id ? 'text-primary' : 'text-white'}`}>{track.title}</h3>
+                      <p className="text-xs text-onSurfaceVariant/80 truncate font-semibold">{track.artist}</p>
+                    </div>
+                    <div className="flex items-center justify-between mt-3 gap-1">
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -144,19 +149,19 @@ export default function SearchScreen() {
                             thumbnail: track.thumbnail
                           });
                         }}
-                        className={`text-[10px] font-black uppercase px-2 py-0.5 rounded transition-all flex items-center gap-1 ${isFollowing ? 'bg-primary/20 text-primary' : 'bg-white/10 text-gray-400 hover:bg-white/20 hover:text-white opacity-0 group-hover:opacity-100'}`}
+                        className={`text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full transition-all flex items-center gap-1 min-w-0 truncate ${isFollowing ? 'bg-primary/20 text-primary border border-primary/20' : 'bg-black/20 text-gray-400 hover:text-white border border-outline/30'}`}
                       >
                         {isFollowing ? <UserCheck size={10} /> : <UserPlus size={10} />}
-                        {isFollowing ? t('following') : t('follow_artist')}
+                        <span className="truncate">{isFollowing ? t('following') : t('follow_artist')}</span>
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); toggleLike(track); }}
+                        className={`p-1.5 rounded-full bg-black/20 hover:bg-black/40 border border-outline/10 text-gray-400 hover:text-primary transition-colors ${isLiked ? 'text-primary' : ''}`}
+                      >
+                        <Heart size={13} fill={isLiked ? "currentColor" : "none"} />
                       </button>
                     </div>
                   </div>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); toggleLike(track); }}
-                    className={`p-2 transition-colors opacity-0 group-hover:opacity-100 ${isLiked ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
-                  >
-                    <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
-                  </button>
                 </motion.div>
               );
             })}
