@@ -180,9 +180,9 @@ export default function HomeScreen() {
   }
 
   return (
-    <div className="space-y-10 pb-12 px-6">
+    <div className="space-y-6 md:space-y-10 pb-12">
       {/* Millimetric Transparent Glassmorphism Header */}
-      <div className="flex justify-between items-center bg-[#050505]/20 backdrop-blur-md pt-4 pb-2 z-10 -mx-6 px-6 border-b border-white/[0.03] sticky top-[-20px]">
+      <div className="flex justify-between items-center bg-[#050505]/20 backdrop-blur-md pt-4 pb-2 z-10 -mx-4 md:-mx-6 px-4 md:px-6 border-b border-white/[0.03] sticky top-[-20px]">
         <div>
           <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] leading-none">
             {language === 'es' ? 'Buenas noches, Sandra' : 'Good evening, Sandra'}
@@ -212,7 +212,7 @@ export default function HomeScreen() {
       </div>
 
       {/* Hero Category Filters */}
-      <div className="flex gap-2.5 overflow-x-auto scrollbar-hide py-1">
+      <div className="flex gap-2.5 overflow-x-auto scrollbar-hide py-1 -mx-4 px-4 md:-mx-6 md:px-6">
         {[
           { id: 'All', label: t('cat_all') },
           { id: 'Music', label: t('cat_music') },
@@ -234,39 +234,36 @@ export default function HomeScreen() {
       </div>
 
       {/* Giant "Magia IA" Hero section */}
-      <section className="relative rounded-[32px] overflow-hidden border border-white/10 shadow-2xl bg-gradient-to-br from-[#0c0f14] via-[#052119] to-[#041a1f]">
+      <section className="relative rounded-[24px] overflow-hidden border border-white/5 shadow-xl bg-gradient-to-br from-[#0c0f14] via-[#051c15] to-[#04151a]">
         {/* Soft floating background light mesh */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-primary/10 rounded-full blur-[100px] pointer-events-none animate-pulse" />
-        <div className="absolute -left-10 bottom-0 w-60 h-60 bg-[#00cbff]/5 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute top-0 right-0 w-60 h-60 bg-primary/5 rounded-full blur-[80px] pointer-events-none animate-pulse" />
+        <div className="absolute -left-10 bottom-0 w-40 h-40 bg-[#00cbff]/5 rounded-full blur-[60px] pointer-events-none" />
 
-        <div className="p-8 space-y-6 relative z-10">
+        <div className="p-4 md:p-5 space-y-3.5 relative z-10">
           
-          {/* Header row containing rotating AI icon */}
-          <div className="flex items-center gap-4">
+          {/* Header row containing rotating AI icon - streamlined */}
+          <div className="flex items-center gap-3">
             <motion.div 
               animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 12, ease: 'linear' }}
-              className="bg-primary/10 p-3.5 rounded-3xl text-primary border border-primary/20 shadow-[0_0_20px_rgba(0,223,130,0.2)]"
+              transition={{ repeat: Infinity, duration: 15, ease: 'linear' }}
+              className="bg-primary/10 p-2.5 rounded-2xl text-primary border border-primary/20 shadow-[0_0_15px_rgba(0,223,130,0.15)] flex-shrink-0"
             >
-              <Sparkles size={24} className="animate-pulse" />
+              <Sparkles size={18} className="animate-pulse" />
             </motion.div>
             
-            <div className="space-y-1">
-              <h2 className="text-3xl font-black text-white tracking-tight font-sans">
+            <div className="space-y-0.5">
+              <h2 className="text-lg md:text-xl font-black text-white tracking-tight font-sans">
                 {language === 'es' ? 'Magia IA' : 'Gemini Core Magic'}
               </h2>
-              <p className="text-xs md:text-sm text-gray-300/90 tracking-wide">
-                {language === 'es' ? 'Describe cómo te sientes y Gemini creará la vibra perfecta para ti.' : 'Describe your physical emotional wave-state to formulate custom vibes.'}
+              <p className="text-[10px] md:text-xs text-gray-400">
+                {language === 'es' ? 'Describe tu estado de ánimo para crear la vibra perfecta.' : 'Describe your state of mind to formulate the vibe.'}
               </p>
             </div>
           </div>
 
-          {/* Interactive Mood selector chips container */}
-          <div className="space-y-3 pt-2">
-            <h3 className="text-[10px] font-mono font-black uppercase tracking-[0.25em] text-[#00df82]">
-              {language === 'es' ? 'Sintonía de Ánimo Estético' : 'Esthetic Frequency Channel'}
-            </h3>
-            <div className="flex gap-2.5 overflow-x-auto scrollbar-hide py-1">
+          {/* Interactive Mood selector chips container - tighter padding */}
+          <div className="space-y-2 pt-0.5">
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide py-0.5">
               {[
                 { label: 'Niño 🧸', val: 'Niño', prompt: 'Música divertida, infantil, alegre e instrumental' },
                 { label: 'Joven 🎒', val: 'Joven', prompt: 'Trap contemporáneo y pop juvenil moderno latino' },
@@ -284,12 +281,12 @@ export default function HomeScreen() {
                     key={mood.val}
                     type="button"
                     onClick={() => triggerMoodSuggestion(mood.prompt, mood.val)}
-                    whileHover={{ scale: 1.06 }}
-                    whileTap={{ scale: 0.94 }}
-                    className={`px-4 py-2 text-[11px] font-bold uppercase rounded-full tracking-wider Transition-all whitespace-nowrap min-w-max border ${
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-full tracking-wider transition-all whitespace-nowrap min-w-max border ${
                       isActive 
-                        ? 'bg-primary text-black border-primary shadow-[0_0_20px_rgba(0,223,130,0.5)] font-black scale-104' 
-                        : 'bg-black/35 hover:bg-black/60 text-white border-white/5 hover:border-white/20'
+                        ? 'bg-primary text-black border-primary shadow-[0_0_15px_rgba(0,223,130,0.4)] font-black' 
+                        : 'bg-black/30 hover:bg-black/50 text-gray-300 border-white/5 hover:border-white/10'
                     }`}
                   >
                     {mood.label}
@@ -299,81 +296,81 @@ export default function HomeScreen() {
             </div>
           </div>
 
-          {/* Sparkly dynamic AI input */}
-          <form onSubmit={handleAiMood} className="space-y-4">
-            <div className="relative flex items-center bg-black/40 backdrop-blur-xl border border-white/5 hover:border-primary/40 focus-within:border-primary rounded-[22px] transition-all focus-within:ring-2 focus-within:ring-primary/15 shadow-inner">
-              <div className="absolute left-4.5 text-primary/70">
-                <Wand2 size={20} className="animate-pulse" />
+          {/* Sparkly dynamic AI input - much thinner coordinates */}
+          <form onSubmit={handleAiMood} className="space-y-3">
+            <div className="relative flex items-center bg-black/40 backdrop-blur-xl border border-white/5 hover:border-primary/40 focus-within:border-primary rounded-xl transition-all focus-within:ring-2 focus-within:ring-primary/10 shadow-inner">
+              <div className="absolute left-3.5 text-primary/70">
+                <Wand2 size={16} className="animate-pulse" />
               </div>
 
-              {/* Input with animated placeholder text */}
+              {/* Input with animated placeholder text - thinner */}
               <input 
                 type="text"
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
                 placeholder={placeholders[placeholderIndex]}
                 disabled={isGenerating}
-                className="w-full bg-transparent border-none py-4.5 pl-12 pr-32 text-sm text-white focus:outline-none placeholder:text-gray-500 font-medium"
+                className="w-full bg-transparent border-none py-3 pl-10 pr-24 text-xs text-white focus:outline-none placeholder:text-gray-500 font-medium"
               />
 
               <motion.button 
                 type="submit"
                 disabled={!aiPrompt.trim() || isGenerating}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="absolute right-2 px-5 py-2.5 bg-gradient-to-r from-primary to-[#00cbff] text-black rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-primary/20 disabled:grayscale disabled:opacity-40 flex items-center gap-1.5"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                className="absolute right-1.5 px-3.5 py-1.5 bg-gradient-to-r from-primary to-[#00cbff] text-black rounded-lg font-black text-[9px] uppercase tracking-wider shadow-md disabled:grayscale disabled:opacity-30 flex items-center gap-1"
               >
                 {isGenerating ? (
-                  <div className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                  <div className="w-2.5 h-2.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <>MAGIA →</>
+                  <>MAGIA</>
                 )}
               </motion.button>
             </div>
           </form>
 
-          {/* AI Results Subsection render */}
+          {/* AI Results Subsection render - tighter spacing */}
           <AnimatePresence>
             {aiResults.length > 0 && (
               <motion.div 
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                className="pt-6 border-t border-white/5 space-y-4 overflow-hidden"
+                className="pt-4 border-t border-white/5 space-y-3 overflow-hidden"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono font-black uppercase tracking-[0.25em] text-primary flex items-center gap-1.5">
+                  <span className="text-[9px] font-mono font-black uppercase tracking-[0.2em] text-primary flex items-center gap-1">
                     <span className="w-1.5 h-1.5 bg-primary rounded-full animate-ping" />
-                    {language === 'es' ? 'Mezcla Inteligente Gemini' : 'Gemini AI Sintonized Vibe'}
+                    {language === 'es' ? 'Sintonizado' : 'AI Tuned'}
                   </span>
                   <button 
                     onClick={() => playTrack(aiResults[0], aiResults)}
-                    className="flex items-center gap-1.5 text-[10px] font-black bg-primary/15 hover:bg-primary/25 text-primary px-3.5 py-1.5 rounded-full transition-all border border-primary/20"
+                    className="flex items-center gap-1 text-[9px] font-black bg-primary/15 hover:bg-primary/25 text-primary px-3 py-1 rounded-full transition-all border border-primary/10"
                   >
-                    <Play size={10} fill="currentColor" /> {t('play_all')}
+                    <Play size={8} fill="currentColor" /> {t('play_all')}
                   </button>
                 </div>
                 
-                <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-8 px-8">
+                <div className="flex gap-3 overflow-x-auto pb-1.5 scrollbar-hide -mx-4 px-4">
                   {aiResults.map((song) => (
                     <motion.div 
                       key={`ai-${song.id}`}
                       onClick={() => playTrack(song, aiResults)}
-                      whileHover={{ y: -4 }}
+                      whileHover={{ y: -3 }}
                       whileTap={{ scale: 0.96 }}
-                      className="min-w-[130px] w-36 space-y-2 cursor-pointer group"
+                      className="min-w-[110px] w-28 space-y-1.5 cursor-pointer group"
                     >
-                      <div className="relative aspect-square rounded-[20px] overflow-hidden shadow-2xl border border-white/5 bg-[#12151c]">
-                        <img src={song.thumbnail} alt="" className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500" />
+                      <div className="relative aspect-square rounded-xl overflow-hidden shadow-lg border border-white/5 bg-[#12151c]">
+                        <img src={song.thumbnail} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-black shadow-lg">
-                            <Play size={16} fill="currentColor" className="ml-0.5" />
+                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-black shadow-lg">
+                            <Play size={12} fill="currentColor" className="ml-0.5" />
                           </div>
                         </div>
                       </div>
                       <div className="space-y-0.5">
-                        <h4 className="text-xs font-black text-white line-clamp-1 group-hover:text-primary transition-colors leading-snug">{song.title}</h4>
-                        <p className="text-[10px] font-bold text-gray-500 truncate leading-tight">{song.artist}</p>
+                        <h4 className="text-[10px] font-black text-white line-clamp-1 group-hover:text-primary transition-colors leading-snug">{song.title}</h4>
+                        <p className="text-[9px] font-bold text-gray-500 truncate leading-tight">{song.artist}</p>
                       </div>
                     </motion.div>
                   ))}
@@ -432,7 +429,7 @@ export default function HomeScreen() {
             <h2 className="text-xl md:text-2xl font-black text-white tracking-tight font-sans">{t('jump_back_in')}</h2>
             <button className="text-gray-500 text-xs font-black uppercase tracking-widest hover:text-white transition-colors">{t('show_all')}</button>
           </div>
-          <div className="flex gap-5 overflow-x-auto pb-4 scrollbar-hide -mx-6 px-6">
+          <div className="flex gap-4 sm:gap-5 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 md:-mx-6 md:px-6">
             {sections.trending.map((song) => (
               <div key={`jump-${song.id}`} className="min-w-[160px] sm:min-w-[185px] w-42 sm:w-46 flex-shrink-0">
                 <AudioTrackGridCard 

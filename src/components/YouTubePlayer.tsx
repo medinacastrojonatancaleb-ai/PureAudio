@@ -29,7 +29,7 @@ export default function YouTubePlayer({
   const playerRef = useRef<any>(null);
   const [isReady, setIsReady] = useState(false);
   const activeVideoId = useRef<string | null>(null);
-  const { setProgress, seekTarget } = usePlayer();
+  const { setProgress, seekTarget, setIsPlaying } = usePlayer();
 
   // Keep track of the current videoId we SHOULD be playing
   useEffect(() => {
@@ -142,6 +142,11 @@ export default function YouTubePlayer({
         event.target.unMute();
         event.target.setVolume(volume * 100);
       } catch (e) {}
+      setIsPlaying(true);
+    }
+
+    if (event.data === PLAYER_STATES.PAUSED) {
+      setIsPlaying(false);
     }
     
     if (event.data === PLAYER_STATES.ENDED) {
@@ -152,7 +157,7 @@ export default function YouTubePlayer({
         onTrackEnd?.();
       }
     }
-  }, [onTrackEnd, volume]);
+  }, [onTrackEnd, volume, setIsPlaying]);
 
   const onPlayerError: YouTubeProps['onError'] = useCallback((event: any) => {
     const currentVideoData = event.target?.getVideoData?.();

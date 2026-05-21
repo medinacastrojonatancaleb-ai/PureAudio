@@ -77,6 +77,7 @@ interface PlayerContextType {
   likedTracks: YouTubeTrack[];
   toggleLike: (track: YouTubeTrack) => Promise<void>;
   getLikeCount: (trackId: string) => number;
+  setIsPlaying: React.Dispatch<React.SetStateAction<boolean>>;
   login: () => Promise<void>;
   loginCustom: (displayName: string, photoURL: string, email?: string) => void;
   logout: () => Promise<void>;
@@ -656,6 +657,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       likedTracks,
       toggleLike,
       getLikeCount,
+      setIsPlaying,
       login,
       loginCustom,
       logout,

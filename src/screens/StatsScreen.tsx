@@ -323,7 +323,7 @@ export default function StatsScreen() {
 
           <div className="grid grid-cols-2 xs:flex gap-3 w-full md:w-auto">
             {auras.map((aura) => (
-              <button
+              <motion.button
                 key={aura.id}
                 onClick={() => handleSetAura(aura.id)}
                 whileHover={{ scale: 1.05 }}
@@ -343,7 +343,7 @@ export default function StatsScreen() {
                     {language === 'es' ? aura.desc : aura.descEn}
                   </p>
                 </div>
-              </button>
+              </motion.button>
             ))}
           </div>
         </div>

@@ -48,31 +48,53 @@ export async function createServer() {
     ];
     let lastError = null;
     for (const model of models) {
-      try {
-        console.log(`[Server] Trying generative AI model: ${model}`);
-        
-        // Only include thinkingConfig for Gemini 3 series models
-        const config: any = {
-          ...params.config,
-        };
-        if (model.startsWith("gemini-3")) {
-          config.thinkingConfig = {
-            thinkingLevel: "MINIMAL"
+      let attempts = 2; // Try up to 2 times for each model if we hit rate limits (429)
+      for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+          console.log(`[Server] Trying generative AI model: ${model} (attempt ${attempt}/${attempts})`);
+          
+          // Only include thinkingConfig for Gemini 3 series models
+          const config: any = {
+            ...params.config,
           };
-        }
+          if (model.startsWith("gemini-3")) {
+            config.thinkingConfig = {
+              thinkingLevel: "MINIMAL"
+            };
+          } else {
+            // gemini-2.x fallback models do not support googleSearch tool configuration
+            if (config.tools) {
+              delete config.tools;
+            }
+          }
 
-        const response = await genAI.models.generateContent({
-          ...params,
-          model,
-          config
-        });
-        if (response && response.text) {
-          console.log(`[Server] Model ${model} succeeded!`);
-          return response;
+          const response = await genAI.models.generateContent({
+            ...params,
+            model,
+            config
+          });
+          if (response && response.text) {
+            console.log(`[Server] Model ${model} succeeded!`);
+            return response;
+          }
+        } catch (err: any) {
+          const errMsg = err.message || String(err);
+          const isRateLimit = errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("429") || errMsg.includes("quota");
+          
+          if (isRateLimit) {
+            console.warn(`[Server] Model ${model} failed on attempt ${attempt}: Quota/Rate limit exceeded (RESOURCE_EXHAUSTED).`);
+            if (attempt < attempts) {
+              const delay = attempt * 1000; // 1s, then 2s
+              console.log(`[Server] Waiting ${delay}ms before retrying ${model}...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue; // retry
+            }
+          } else {
+            console.warn(`[Server] Model ${model} failed on attempt ${attempt}:`, errMsg);
+          }
+          lastError = err;
+          break; // break the attempt loop to try next model
         }
-      } catch (err: any) {
-        console.warn(`[Server] Model ${model} failed:`, err.message || err);
-        lastError = err;
       }
     }
     throw lastError || new Error("All Gemini models failed.");
@@ -301,39 +323,435 @@ export async function createServer() {
   });
 
   // AI Lyrics Endpoint
+  const LYRICS_DB_PATH = path.join(process.cwd(), "lyrics-db.json");
+
+  function readLyricsDb(): Record<string, { lyrics: string; timestamp: number }> {
+    try {
+      if (fs.existsSync(LYRICS_DB_PATH)) {
+        const content = fs.readFileSync(LYRICS_DB_PATH, "utf-8");
+        return JSON.parse(content);
+      }
+    } catch (error) {
+      console.error("[Server DB] Error reading lyrics database:", error);
+    }
+    return {};
+  }
+
+  function writeLyricsDb(data: Record<string, { lyrics: string; timestamp: number }>) {
+    try {
+      fs.writeFileSync(LYRICS_DB_PATH, JSON.stringify(data, null, 2), "utf-8");
+    } catch (error) {
+      console.error("[Server DB] Error writing lyrics database:", error);
+    }
+  }
+
+  function getNormalizedLyricKey(title: string, artist: string): string {
+    let cleanTitle = String(title)
+      .replace(/\s*\([^)]*(?:video|lyric|audio|oficial|official|subtitul|remaster|karaoke|live|cover|hd|hq)[^)]*\)/gi, "")
+      .replace(/\s*\[[^\]]*(?:video|lyric|audio|oficial|official|subtitul|remaster|karaoke|live|cover|hd|hq)[^\]]*\]/gi, "")
+      .replace(/[^\w\sа-яА-ЯáéíóúÁÉÍÓÚñÑ]/g, "")
+      .trim()
+      .toLowerCase();
+    let cleanArtist = artist ? String(artist).replace(/[^\w\sа-яА-ЯáéíóúÁÉÍÓÚñÑ]/g, "").trim().toLowerCase() : "";
+
+    if (cleanArtist) {
+      const artistWords = cleanArtist.split(/\s+/).filter(w => w.length > 1);
+      cleanTitle = cleanTitle.replace(cleanArtist, "").trim();
+      for (const word of artistWords) {
+        const regex = new RegExp(`\\b${word}\\b`, 'g');
+        cleanTitle = cleanTitle.replace(regex, "").trim();
+      }
+      cleanTitle = cleanTitle.replace(new RegExp(`^${cleanArtist}\\s+`, 'i'), '');
+      cleanTitle = cleanTitle.replace(new RegExp(`\\s+${cleanArtist}$`, 'i'), '');
+    }
+
+    cleanTitle = cleanTitle.replace(/\s+/g, " ").trim();
+    cleanArtist = cleanArtist.replace(/\s+/g, " ").trim();
+
+    if (!cleanTitle) {
+      cleanTitle = String(title).replace(/[^\w\sа-яА-ЯáéíóúÁÉÍÓÚñÑ]/g, "").trim().toLowerCase();
+    }
+
+    return `${cleanTitle}_by_${cleanArtist}`.replace(/\s+/g, "_");
+  }
+
+  function lookupLyricsEntry(lyricsDb: Record<string, any>, title: string, artist: string): any | null {
+    const cleanTitle = String(title).replace(/[^\w\sа-яА-ЯáéíóúÁÉÍÓÚñÑ]/g, "").trim().toLowerCase();
+    const cleanArtist = artist ? String(artist).replace(/[^\w\sа-яА-ЯáéíóúÁÉÍÓÚñÑ]/g, "").trim().toLowerCase() : "";
+    const basicKey = `${cleanTitle}_by_${cleanArtist}`.replace(/\s+/g, "_");
+
+    if (lyricsDb[basicKey]) {
+      return lyricsDb[basicKey];
+    }
+
+    const normalizedKey = getNormalizedLyricKey(title, artist);
+    if (lyricsDb[normalizedKey]) {
+      return lyricsDb[normalizedKey];
+    }
+
+    const searchTitle = normalizedKey.split("_by_")[0];
+    const searchArtist = cleanArtist.replace(/\s+/g, "_");
+    
+    if (searchTitle && searchArtist) {
+      for (const key of Object.keys(lyricsDb)) {
+        if (key.includes(searchTitle) && key.includes(searchArtist)) {
+          console.log(`[Server DB] Robust match found: ${key} for: ${normalizedKey}`);
+          return lyricsDb[key];
+        }
+      }
+    }
+
+    return null;
+  }
+
+  async function fetchLyricsFromLetrasComDirectly(title: string, artist: string): Promise<string | null> {
+    try {
+      const cleanSlug = (str: string) => {
+        return str
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "") // removes accents
+          .toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, "") // remove special chars
+          .trim()
+          .replace(/\s+/g, "-"); // replace spaces with hyphens
+      };
+
+      const artistSlug = cleanSlug(artist);
+      const songSlug = cleanSlug(title);
+
+      if (!artistSlug || !songSlug) return null;
+
+      const urls = [
+        `https://www.letras.com/${artistSlug}/${songSlug}/`,
+        `https://www.letras.com/${artistSlug}/${songSlug}-letra/`
+      ];
+
+      for (const url of urls) {
+        console.log(`[Scraper] Attempting direct crawl for fallback from Letras.com: ${url}`);
+        const res = await fetch(url, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+            "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"
+          }
+        });
+
+        if (!res.ok) {
+          console.warn(`[Scraper] Direct crawl failed for ${url} (status: ${res.status})`);
+          continue;
+        }
+
+        const html = await res.text();
+
+        // Letras.com has lyric containers like lyric-cnt, or cnt-letra containing multiple <p> tags
+        const lyricMatch = html.match(/<div class=["']lyric-cnt["']>([\s\S]*?)<\/div>/i) ||
+                           html.match(/<div class=["']cnt-letra[^"']*["']>([\s\S]*?)<\/div>/i);
+
+        if (lyricMatch) {
+          const block = lyricMatch[1];
+          const paragraphs = [...block.matchAll(/<p>([\s\S]*?)<\/p>/gmi)].map(m => m[1]);
+          
+          if (paragraphs.length > 0) {
+            return paragraphs.map(p => {
+              return p
+                .replace(/<br\s*\/?>/gi, "\n")
+                .replace(/<[^>]+>/g, "")
+                .replace(/&nbsp;/g, " ")
+                .replace(/&quot;/g, '"')
+                .replace(/&amp;/g, '&')
+                .replace(/&#39;/g, "'")
+                .replace(/\n{3,}/g, "\n\n")
+                .trim();
+            }).join("\n\n");
+          } else {
+            let cleanBlock = block
+              .replace(/<br\s*\/?>/gi, "\n")
+              .replace(/<p>/gi, "")
+              .replace(/<\/p>/gi, "\n\n")
+              .replace(/<[^>]+>/g, "")
+              .replace(/&nbsp;/g, " ")
+              .replace(/&quot;/g, '"')
+              .replace(/&amp;/g, '&')
+              .replace(/&#39;/g, "'")
+              .replace(/\n{3,}/g, "\n\n")
+              .trim();
+            if (cleanBlock.length > 50) return cleanBlock;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[Scraper] Direct scraper failed:", err);
+    }
+    return null;
+  }
+
+  function getCleanTitleAndArtist(title: string, artist: string) {
+    let cleanTitle = String(title)
+      .replace(/\s*\([^)]*(?:video|lyric|audio|oficial|official|subtitul|remaster|karaoke|live|cover|hd|hq|music|clip|ft|feat)[^)]*\)/gi, "")
+      .replace(/\s*\[[^\]]*(?:video|lyric|audio|oficial|official|subtitul|remaster|karaoke|live|cover|hd|hq|music|clip|ft|feat)[^\]]*\]/gi, "")
+      .replace(/\b(?:official video|official audio|video oficial|official lyric video|lyrics|remastered|hd|hq)\b/gi, "");
+
+    let cleanArtist = artist ? String(artist)
+      .replace(/\s*\([^)]*(?:video|lyric|audio|oficial|official|subtitul|remaster|karaoke|live|cover|hd|hq|music|clip)[^)]*\)/gi, "")
+      .replace(/\s*\[[^\]]*(?:video|lyric|audio|oficial|official|subtitul|remaster|karaoke|live|cover|hd|hq|music|clip)[^\]]*\]/gi, "")
+      .replace(/\b(?:topic|vevo)\b/gi, "")
+      .replace(/[^\w\sа-яА-ЯáéíóúÁÉÍÓÚñÑ']/g, "")
+      .replace(/\s+/g, " ")
+      .trim() : "";
+
+    // If the title starts with "artist - " or contains "-", let's split it
+    if (cleanTitle.includes(" - ")) {
+      const parts = cleanTitle.split(" - ");
+      if (parts.length >= 2) {
+        const part0 = parts[0].trim();
+        const part1 = parts[1].trim();
+        if (cleanArtist && part0.toLowerCase().includes(cleanArtist.toLowerCase())) {
+          cleanTitle = part1;
+        } else if (cleanArtist && part1.toLowerCase().includes(cleanArtist.toLowerCase())) {
+          cleanTitle = part0;
+        } else {
+          if (!cleanArtist) {
+            cleanArtist = part0;
+            cleanTitle = part1;
+          }
+        }
+      }
+    }
+
+    // Also remove the artist name from the title if present
+    if (cleanArtist) {
+      const artistWords = cleanArtist.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      let lowerTitle = cleanTitle.toLowerCase();
+      for (const word of artistWords) {
+        const idx = lowerTitle.indexOf(word);
+        if (idx !== -1) {
+          const regex = new RegExp(`\\b${word}\\b`, 'gi');
+          cleanTitle = cleanTitle.replace(regex, "").trim();
+        }
+      }
+      cleanTitle = cleanTitle.replace(/^\s*-\s*|\s*-\s*$/g, "").trim();
+    }
+
+    cleanTitle = cleanTitle.replace(/[^\w\sа-яА-ЯáéíóúÁÉÍÓÚñÑ']/g, " ").replace(/\s+/g, " ").trim();
+    cleanArtist = cleanArtist.replace(/[^\w\sа-яА-ЯáéíóúÁÉÍÓÚñÑ']/g, " ").replace(/\s+/g, " ").trim();
+
+    return { 
+      trackName: cleanTitle || title, 
+      artistName: cleanArtist || artist 
+    };
+  }
+
+  async function fetchLyricsFromLrcLib(title: string, artist: string): Promise<any | null> {
+    const { trackName, artistName } = getCleanTitleAndArtist(title, artist);
+    const getUrl = `https://lrclib.net/api/get?track_name=${encodeURIComponent(trackName)}&artist_name=${encodeURIComponent(artistName)}`;
+    
+    try {
+      console.log(`[LRCLIB] Fetching exact match via: ${getUrl}`);
+      const response = await fetch(getUrl, {
+        headers: {
+          'User-Agent': 'PureAudioWeb/1.0.0 (https://ais-dev-7ddelib5ur2tm3jxjpopyj-275348128361.us-west1.run.app; medinacastrojonatancaleb@gmail.com)'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data && (data.syncedLyrics || data.plainLyrics)) {
+          console.log(`[LRCLIB] Found lyrics via GET for: ${trackName} - ${artistName}`);
+          return {
+            lyrics: data.syncedLyrics || data.plainLyrics,
+            syncedLyrics: data.syncedLyrics || null,
+            plainLyrics: data.plainLyrics || null,
+            albumName: data.albumName || null,
+            duration: data.duration || null,
+            isSynced: !!data.syncedLyrics
+          };
+        }
+      } else {
+        console.log(`[LRCLIB] GET query returned status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error("[LRCLIB] Exact match lookup error:", error);
+    }
+
+    const searchQuery = `${trackName} ${artistName}`.trim();
+    const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(searchQuery)}`;
+    
+    try {
+      console.log(`[LRCLIB] Fetching search matches via: ${searchUrl}`);
+      const response = await fetch(searchUrl, {
+        headers: {
+          'User-Agent': 'PureAudioWeb/1.0.0 (https://ais-dev-7ddelib5ur2tm3jxjpopyj-275348128361.us-west1.run.app; medinacastrojonatancaleb@gmail.com)'
+        }
+      });
+      
+      if (response.ok) {
+        const results = await response.json();
+        if (Array.isArray(results) && results.length > 0) {
+          const bestResult = results.find(item => item && (item.syncedLyrics || item.plainLyrics));
+          if (bestResult) {
+            console.log(`[LRCLIB] Found lyrics via search results for query: "${searchQuery}"`);
+            return {
+              lyrics: bestResult.syncedLyrics || bestResult.plainLyrics,
+              syncedLyrics: bestResult.syncedLyrics || null,
+              plainLyrics: bestResult.plainLyrics || null,
+              albumName: bestResult.albumName || null,
+              duration: bestResult.duration || null,
+              isSynced: !!bestResult.syncedLyrics
+            };
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[LRCLIB] Search fallback lookup error:", error);
+    }
+
+    const specificSearchUrl = `https://lrclib.net/api/search?track_name=${encodeURIComponent(trackName)}&artist_name=${encodeURIComponent(artistName)}`;
+    try {
+      console.log(`[LRCLIB] Fetching specific search matches via: ${specificSearchUrl}`);
+      const response = await fetch(specificSearchUrl, {
+        headers: {
+          'User-Agent': 'PureAudioWeb/1.0.0 (https://ais-dev-7ddelib5ur2tm3jxjpopyj-275348128361.us-west1.run.app; medinacastrojonatancaleb@gmail.com)'
+        }
+      });
+      
+      if (response.ok) {
+        const results = await response.json();
+        if (Array.isArray(results) && results.length > 0) {
+          const bestResult = results.find(item => item && (item.syncedLyrics || item.plainLyrics));
+          if (bestResult) {
+            console.log(`[LRCLIB] Found lyrics via specific search results for: ${trackName} - ${artistName}`);
+            return {
+              lyrics: bestResult.syncedLyrics || bestResult.plainLyrics,
+              syncedLyrics: bestResult.syncedLyrics || null,
+              plainLyrics: bestResult.plainLyrics || null,
+              albumName: bestResult.albumName || null,
+              duration: bestResult.duration || null,
+              isSynced: !!bestResult.syncedLyrics
+            };
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[LRCLIB] Specific search fallback lookup error:", error);
+    }
+
+    return null;
+  }
+
   app.get("/api/lyrics", async (req, res) => {
     const { title, artist } = req.query;
     if (!title) return res.status(400).json({ error: "Title is required" });
 
-    try {
-      if (!geminiKey) {
-        throw new Error("Missing GEMINI_API_KEY");
+    const titleStr = String(title);
+    const artistStr = artist ? String(artist) : "";
+
+    const lyricsDb = readLyricsDb();
+    const cachedEntry = lookupLyricsEntry(lyricsDb, titleStr, artistStr);
+
+    if (cachedEntry) {
+      console.log(`[Server DB] Serving cached lyrics using robust lookup for: ${titleStr} - ${artistStr}`);
+      if (typeof cachedEntry === 'string') {
+        const hasTimeStamp = cachedEntry.includes('[00:') || cachedEntry.includes('[01:') || cachedEntry.includes('[');
+        return res.json({ 
+          lyrics: cachedEntry,
+          syncedLyrics: hasTimeStamp ? cachedEntry : null,
+          plainLyrics: hasTimeStamp ? null : cachedEntry,
+          isSynced: hasTimeStamp,
+          albumName: null,
+          duration: null
+        });
+      } else {
+        const lyricsText = cachedEntry.lyrics;
+        const hasTimeStamp = lyricsText?.includes('[00:') || lyricsText?.includes('[01:') || lyricsText?.includes('[');
+        return res.json({
+          lyrics: lyricsText || "",
+          syncedLyrics: cachedEntry.syncedLyrics || (hasTimeStamp ? lyricsText : null),
+          plainLyrics: cachedEntry.plainLyrics || (hasTimeStamp ? null : lyricsText),
+          albumName: cachedEntry.albumName || null,
+          duration: cachedEntry.duration || null,
+          isSynced: cachedEntry.isSynced !== undefined ? cachedEntry.isSynced : hasTimeStamp
+        });
       }
-      const response = await generateWithFallback({
-        contents: `Find or provide the full lyrics for the song "${title}" by "${artist}". 
+    }
 
-        SAFETY POLICY:
-        - If the lyrics contain highly explicit sexual content or extreme hate speech, return "Content unavailable due to safety policy."
-        - Prefer clean versions if available.
-        
-        If you can provide timestamps (LRC format style, e.g. [00:12.34]Lyric line), that would be amazing. 
-        If not, just return the plain text lyrics. 
-        Format the response as a clean string. Do not include extra commentary, just the lyrics.`
-      });
+    const lyricKey = getNormalizedLyricKey(titleStr, artistStr);
 
-      const lyrics = response.text?.trim() || "No lyrics found.";
-      res.json({ lyrics });
+    try {
+      const lrcResult = await fetchLyricsFromLrcLib(titleStr, artistStr);
+      
+      if (lrcResult) {
+        lyricsDb[lyricKey] = {
+          lyrics: lrcResult.lyrics,
+          syncedLyrics: lrcResult.syncedLyrics,
+          plainLyrics: lrcResult.plainLyrics,
+          albumName: lrcResult.albumName,
+          duration: lrcResult.duration,
+          isSynced: lrcResult.isSynced,
+          timestamp: Date.now()
+        };
+        writeLyricsDb(lyricsDb);
+        console.log(`[Server DB] Saved new LRCLIB lyrics under database key: ${lyricKey}`);
+        return res.json(lrcResult);
+      }
+
+      console.log(`[Server DB] No lyrics found on LRCLIB for: ${titleStr} - ${artistStr}`);
+      
+      const emptyResult = {
+        lyrics: "No se encontraron letras disponibles.",
+        syncedLyrics: null,
+        plainLyrics: "No se encontraron letras disponibles.",
+        albumName: null,
+        duration: null,
+        isSynced: false
+      };
+      
+      lyricsDb[lyricKey] = {
+        ...emptyResult,
+        timestamp: Date.now()
+      };
+      writeLyricsDb(lyricsDb);
+      
+      res.json(emptyResult);
     } catch (error) {
-      console.warn("[Server] Lyrics API error, using highly aligned procedural fallback:", error);
+      console.error("[Server] LRCLIB lyrics lookup failed completely with error:", error);
       res.json({
-        lyrics: `[00:01.00] 🎵 Escuchando la melodía de "${title}" por "${artist}" 🎵
-[00:08.00] 
-[00:10.00] Vaya, VibeSonic AI está experimentando una alta demanda espacial en este momento...
-[00:15.00] ¡Las letras completas fueron sincronizadas satisfactoriamente con la señal de voz!
-[00:20.50] Siente el sonido en alta definición de este temazo.
-[00:27.00] 
-[00:32.00] Disfruta la música con VibeSonic Premium 🎧`
+        lyrics: "No se encontraron letras disponibles.",
+        syncedLyrics: null,
+        plainLyrics: "No se encontraron letras disponibles.",
+        albumName: null,
+        duration: null,
+        isSynced: false
       });
+    }
+  });
+
+    // Save/Correct lyrics manually
+  app.post("/api/lyrics", (req, res) => {
+    try {
+      const { title, artist, lyrics } = req.body;
+      if (!title || !lyrics) {
+        return res.status(400).json({ error: "Title and lyrics are required" });
+      }
+
+      const cleanTitle = String(title).replace(/[^\w\sа-яА-ЯáéíóúÁÉÍÓÚñÑ]/g, "").trim();
+      const cleanArtist = artist ? String(artist).replace(/[^\w\sа-яА-ЯáéíóúÁÉÍÓÚñÑ]/g, "").trim() : "";
+      const basicKey = `${cleanTitle}_by_${cleanArtist}`.toLowerCase().replace(/\s+/g, "_");
+      const normalizedKey = getNormalizedLyricKey(String(title), artist ? String(artist) : "");
+
+      const lyricsDb = readLyricsDb();
+      const entry = {
+        lyrics: String(lyrics).trim(),
+        timestamp: Date.now()
+      };
+      
+      lyricsDb[normalizedKey] = entry;
+      lyricsDb[basicKey] = entry;
+      
+      writeLyricsDb(lyricsDb);
+      console.log(`[Server DB] User manually updated/corrected lyrics for keys: ${normalizedKey} & ${basicKey}`);
+      res.json({ success: true, lyrics: entry.lyrics });
+    } catch (err: any) {
+      console.error("[Server] Error saving corrected lyrics:", err);
+      res.status(500).json({ error: "Error saving corrected lyrics." });
     }
   });
 

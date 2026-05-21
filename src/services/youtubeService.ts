@@ -94,15 +94,28 @@ export const youtubeService = {
     }
   },
 
-  async getLyrics(title: string, artist: string): Promise<string> {
+  async getLyrics(title: string, artist: string): Promise<any> {
     try {
       const response = await fetch(`/api/lyrics?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`);
       if (!response.ok) throw new Error('Lyrics failed');
-      const data = await response.json();
-      return data.lyrics;
+      return await response.json();
     } catch (error) {
       console.error('Lyrics service error:', error);
-      return 'No lyrics found for this track.';
+      return { lyrics: 'No se encontraron letras disponibles.', isSynced: false };
+    }
+  },
+
+  async saveLyrics(title: string, artist: string, lyrics: string): Promise<boolean> {
+    try {
+      const response = await fetch('/api/lyrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, artist, lyrics })
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Save lyrics error:', error);
+      return false;
     }
   },
 

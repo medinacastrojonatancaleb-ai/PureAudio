@@ -26,14 +26,124 @@ export default function App() {
   );
 }
 
+const getTrackGradient = (track: any) => {
+  if (!track) return 'radial-gradient(circle at 50% 50%, #111 0%, #000 100%)';
+  const str = (track.title + (track.artist || '')).toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h1 = Math.abs(hash % 360);
+  const h2 = Math.abs((hash * 1.6 + 130) % 360);
+  const color1 = `hsla(${h1}, 75%, 14%, 0.85)`;
+  const color2 = `hsla(${h2}, 85%, 8%, 0.9)`;
+  const color3 = `hsla(${(h1 + 240) % 360}, 90%, 4%, 0.98)`;
+  return `radial-gradient(circle at 15% 25%, ${color1} 0%, transparent 60%), radial-gradient(circle at 85% 75%, ${color2} 0%, transparent 65%), radial-gradient(circle at 50% 50%, ${color3} 0%, 100% #020202)`;
+};
+
+interface SyncedLine {
+  time: number;
+  text: string;
+}
+
+const parseLrc = (lrcText: string): SyncedLine[] => {
+  if (!lrcText) return [];
+  const lines = lrcText.split(/\r?\n/);
+  const parsed: SyncedLine[] = [];
+  const timeRegex = /\[(\d+):(\d+(?:\.\d+)?)\]/;
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const match = trimmed.match(timeRegex);
+    if (match) {
+      const minutes = parseInt(match[1], 10);
+      const seconds = parseFloat(match[2]);
+      const timeInSecs = minutes * 60 + seconds;
+      const text = trimmed.replace(timeRegex, "").trim();
+      parsed.push({ time: timeInSecs, text });
+    }
+  }
+  return parsed.sort((a, b) => a.time - b.time);
+};
+
 function AppContent() {
+  const { 
+    currentTrack, 
+    isPlaying, 
+    playTrack,
+    nextTrack,
+    prevTrack,
+    togglePlay, 
+    volume, 
+    setVolume, 
+    currentTime,
+    duration,
+    seekTo,
+    isShuffle,
+    toggleShuffle,
+    repeatMode,
+    toggleRepeat,
+    user, 
+    login, 
+    logout, 
+    toggleLike, 
+    likedTracks,
+    getLikeCount,
+    followedArtists,
+    toggleFollowArtist,
+    notification,
+    notify,
+    queue,
+    language,
+    setLanguage,
+    t,
+    isAuthModalOpen,
+    setAuthModalOpen
+  } = usePlayer();
+
   const [activeTab, setActiveTab] = useState('home');
   const [isExpanded, setIsExpanded] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [lyrics, setLyrics] = useState<string>('');
+  const [syncedLyrics, setSyncedLyrics] = useState<string | null>(null);
+  const [plainLyrics, setPlainLyrics] = useState<string | null>(null);
+  const [isSynced, setIsSynced] = useState<boolean>(false);
+  const [lyricsAlbum, setLyricsAlbum] = useState<string | null>(null);
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
+  const [isEditingLyrics, setIsEditingLyrics] = useState(false);
+  const [editedLyricsText, setEditedLyricsText] = useState('');
   const [isIntroActive, setIsIntroActive] = useState(true);
   const [activeAura, setActiveAura] = useState('cyber');
+
+  const parsedLines = React.useMemo(() => parseLrc(syncedLyrics || ''), [syncedLyrics]);
+
+  const activeLineIndex = React.useMemo(() => {
+    if (parsedLines.length === 0) return -1;
+    let activeIndex = -1;
+    for (let i = 0; i < parsedLines.length; i++) {
+      if (currentTime >= parsedLines[i].time) {
+        activeIndex = i;
+      } else {
+        break;
+      }
+    }
+    return activeIndex;
+  }, [parsedLines, currentTime]);
+
+  const lyricsContainerRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    if (activeLineIndex !== -1 && lyricsContainerRef.current) {
+      const container = lyricsContainerRef.current;
+      const activeEl = container.querySelector(`[data-lyric-idx="${activeLineIndex}"]`);
+      if (activeEl) {
+        activeEl.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      }
+    }
+  }, [activeLineIndex]);
 
   // Sparkly floating particles arrays
   const [particles] = useState(() => 
@@ -73,40 +183,6 @@ function AppContent() {
     return () => window.removeEventListener('app-aura-changed', handleAuraChange);
   }, []);
 
-  const { 
-    currentTrack, 
-    isPlaying, 
-    playTrack,
-    nextTrack,
-    prevTrack,
-    togglePlay, 
-    volume, 
-    setVolume, 
-    currentTime,
-    duration,
-    seekTo,
-    isShuffle,
-    toggleShuffle,
-    repeatMode,
-    toggleRepeat,
-    user, 
-    login, 
-    logout, 
-    toggleLike, 
-    likedTracks,
-    getLikeCount,
-    followedArtists,
-    toggleFollowArtist,
-    notification,
-    notify,
-    queue,
-    language,
-    setLanguage,
-    t,
-    isAuthModalOpen,
-    setAuthModalOpen
-  } = usePlayer();
-
   // Emotional music reactive Aura Mode (auto calibrates overlay according to metadata keywords!)
   React.useEffect(() => {
     if (!currentTrack) return;
@@ -138,15 +214,54 @@ function AppContent() {
 
   const fetchLyrics = async () => {
     if (!currentTrack) return;
-    setIsLoadingLyrics(true);
     setShowLyrics(true);
+    if (!lyrics && !isLoadingLyrics) {
+      setIsLoadingLyrics(true);
+      try {
+        const result = await youtubeService.getLyrics(currentTrack.title, currentTrack.artist);
+        if (result) {
+          setLyrics(result.lyrics || '');
+          setSyncedLyrics(result.syncedLyrics || null);
+          setPlainLyrics(result.plainLyrics || null);
+          setIsSynced(!!result.isSynced);
+          setLyricsAlbum(result.albumName || null);
+        }
+      } catch (e) {
+        setLyrics('No se encontraron letras disponibles.');
+        setSyncedLyrics(null);
+        setPlainLyrics('No se encontraron letras disponibles.');
+        setIsSynced(false);
+        setLyricsAlbum(null);
+      } finally {
+        setIsLoadingLyrics(false);
+      }
+    }
+  };
+
+  const handleSaveLyrics = async () => {
+    if (!currentTrack) return;
     try {
-      const result = await youtubeService.getLyrics(currentTrack.title, currentTrack.artist);
-      setLyrics(result);
-    } catch (e) {
-      setLyrics('Failed to load lyrics.');
-    } finally {
-      setIsLoadingLyrics(false);
+      const success = await youtubeService.saveLyrics(currentTrack.title, currentTrack.artist, editedLyricsText);
+      if (success) {
+        setLyrics(editedLyricsText);
+        const hasTimeStamp = editedLyricsText.includes('[00:') || editedLyricsText.includes('[01:') || editedLyricsText.includes('[');
+        if (hasTimeStamp) {
+          setSyncedLyrics(editedLyricsText);
+          setPlainLyrics(null);
+          setIsSynced(true);
+        } else {
+          setSyncedLyrics(null);
+          setPlainLyrics(editedLyricsText);
+          setIsSynced(false);
+        }
+        setIsEditingLyrics(false);
+        notify(language === 'es' ? 'Letra guardada correctamente.' : 'Lyrics updated successfully.', 'success');
+      } else {
+        notify(language === 'es' ? 'Error al guardar la letra.' : 'Error saving corrected lyrics.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      notify(language === 'es' ? 'Error al guardar la letra.' : 'Error saving corrected lyrics.', 'error');
     }
   };
 
@@ -228,12 +343,52 @@ function AppContent() {
     }
   }, [playTrack]);
 
-  // Reset lyrics view when track changes & Auto-expand player
+  // Reset lyrics view when track changes, auto-expand player, & start background analysis of lyrics instantly with a 1.5s debounce to save API quota!
   React.useEffect(() => {
     setShowLyrics(false);
     setLyrics('');
+    setSyncedLyrics(null);
+    setPlainLyrics(null);
+    setIsSynced(false);
+    setLyricsAlbum(null);
+    setIsEditingLyrics(false);
+    setEditedLyricsText('');
     if (currentTrack) {
       setIsExpanded(true);
+      
+      let active = true;
+      const timer = setTimeout(async () => {
+        setIsLoadingLyrics(true);
+        try {
+          const result = await youtubeService.getLyrics(currentTrack.title, currentTrack.artist);
+          if (active) {
+            if (result) {
+              setLyrics(result.lyrics || '');
+              setSyncedLyrics(result.syncedLyrics || null);
+              setPlainLyrics(result.plainLyrics || null);
+              setIsSynced(!!result.isSynced);
+              setLyricsAlbum(result.albumName || null);
+            }
+          }
+        } catch (e) {
+          if (active) {
+            setLyrics('No se encontraron letras disponibles.');
+            setSyncedLyrics(null);
+            setPlainLyrics('No se encontraron letras disponibles.');
+            setIsSynced(false);
+            setLyricsAlbum(null);
+          }
+        } finally {
+          if (active) {
+            setIsLoadingLyrics(false);
+          }
+        }
+      }, 1500); // 1.5s delay debounces fast skips entirely!
+
+      return () => {
+        active = false;
+        clearTimeout(timer);
+      };
     }
   }, [currentTrack?.id]);
 
@@ -473,7 +628,7 @@ function AppContent() {
           )}
         </AnimatePresence>
 
-        <header className="p-4 flex items-center justify-between z-20 absolute top-0 left-0 right-0 bg-gradient-to-b from-background/70 to-transparent">
+        <header className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] flex items-center justify-between z-20 absolute top-0 left-0 right-0 bg-gradient-to-b from-background/80 to-transparent">
           <div className="flex items-center gap-2.5 md:hidden">
              {currentTrack?.thumbnail ? (
                <motion.div 
@@ -537,7 +692,7 @@ function AppContent() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden pt-20 px-4 md:px-6 pb-32 scrollbar-hide">
+        <main className={`flex-1 overflow-y-auto overflow-x-hidden pt-[calc(5.25rem+env(safe-area-inset-top))] px-4 md:px-6 scrollbar-hide transition-all ${currentTrack ? 'pb-[calc(11.5rem+env(safe-area-inset-bottom))]' : 'pb-[calc(6.5rem+env(safe-area-inset-bottom))]'}`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -558,7 +713,7 @@ function AppContent() {
               <motion.div 
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                className="fixed bottom-24 left-2 right-2 bg-surfaceVariant/95 backdrop-blur-md rounded-xl p-2 flex items-center gap-3 shadow-2xl z-50 border border-outline/40"
+                className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-2.5 right-2.5 bg-surfaceVariant/95 backdrop-blur-3xl rounded-2xl p-2.5 flex items-center gap-3.5 shadow-[0_10px_35px_rgba(0,0,0,0.7)] z-50 border border-white/10"
                 onClick={() => setIsExpanded(true)}
               >
                 <div className="w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden bg-primary/10 shadow-inner">
@@ -752,7 +907,7 @@ function AppContent() {
   </AnimatePresence>
 
       {/* Bottom Nav (Mobile Only) */}
-      <nav className="md:hidden bg-surface/90 backdrop-blur-2xl border-t border-outline/30 h-20 flex items-center justify-around px-4 z-40 fixed bottom-0 left-0 right-0">
+      <nav className="md:hidden bg-surface/95 backdrop-blur-3xl border-t border-outline/30 h-[calc(5rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex items-center justify-around px-4 z-40 fixed bottom-0 left-0 right-0 shadow-[0_-10px_35px_rgba(0,0,0,0.8)]">
         <NavButton 
           active={activeTab === 'home'} 
           onClick={() => setActiveTab('home')} 
@@ -786,19 +941,29 @@ function AppContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex flex-col overflow-hidden"
+            className="fixed inset-0 z-[100] flex flex-col overflow-hidden h-[100dvh]"
           >
             {/* Ambient Background Effect */}
-            <div className="absolute inset-0 bg-black">
-              <div 
-                className="absolute inset-0 opacity-40 blur-[100px] scale-150 transition-all duration-[2000ms]"
-                style={{
-                  background: `url(${currentTrack.thumbnail}) center/cover no-repeat`
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/40 to-black" />
+            <div 
+              className="absolute inset-0 transition-all duration-[1200ms] ease-out-back"
+              style={{
+                background: showLyrics 
+                  ? getTrackGradient(currentTrack) 
+                  : 'radial-gradient(circle at 50% 50%, #0c0c0e 0%, #000000 100%)'
+              }}
+            >
+              {!showLyrics && (
+                <div 
+                  className="absolute inset-0 opacity-40 blur-[120px] scale-150 transition-all duration-[2200ms]"
+                  style={{
+                    background: `url(${currentTrack.thumbnail}) center/cover no-repeat`
+                  }}
+                />
+              )}
+              {/* Soft atmospheric noise grid and breathing overlay */}
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/35 to-black pointer-events-none" />
             </div>
-            <div className="relative z-10 flex flex-col h-screen md:h-full justify-between p-4 xs:p-6 md:py-6 md:px-12 lg:p-12 max-w-7xl mx-auto w-full overflow-hidden select-none">
+             <div className="relative z-10 flex flex-col h-[100dvh] justify-between p-4 xs:p-5 md:py-6 md:px-12 lg:p-12 max-w-7xl mx-auto w-full overflow-hidden select-none pt-[calc(1.25rem+env(safe-area-inset-top))] pb-[calc(1.75rem+env(safe-area-inset-bottom))]">
               <header className="flex justify-between items-center mb-2 xs:mb-4 md:mb-6 lg:mb-12 flex-shrink-0">
                 <button 
                   onClick={() => setIsExpanded(false)}
@@ -824,29 +989,152 @@ function AppContent() {
                       initial={{ scale: 0.9, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.9, opacity: 0 }}
-                      className="w-full max-w-[245px] xs:max-w-[295px] sm:max-w-[340px] md:max-w-[330px] lg:max-w-[400px] xl:max-w-[420px] aspect-square flex-shrink-0 relative group flex items-center justify-center mx-auto"
+                      className="w-auto h-[25vh] min-h-[140px] max-h-[240px] xs:h-[28vh] xs:max-h-[295px] md:w-full md:h-auto md:max-w-[330px] lg:max-w-[400px] xl:max-w-[420px] aspect-square flex-shrink-0 relative group flex items-center justify-center mx-auto"
                     >
                       <RotatingVinyl isPlaying={isPlaying} thumbnail={currentTrack.thumbnail} />
                     </motion.div>
                   ) : (
                     <motion.div 
                       key="lyrics"
-                      initial={{ y: 50, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      exit={{ y: 50, opacity: 0 }}
-                      className="w-full max-w-2xl h-[300px] md:h-full overflow-y-auto scrollbar-hide py-4 flex flex-col items-center"
+                      initial={{ scale: 0.95, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.95, opacity: 0 }}
+                      className="w-full max-w-2xl flex-1 h-0 overflow-y-auto scrollbar-hide py-3 md:py-6 px-3 md:px-8 flex flex-col items-center"
                     >
                       {isLoadingLyrics ? (
-                        <div className="flex flex-col items-center gap-4 mt-10">
-                          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                           <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">{t('summoning_lyrics')}</p>
+                        <div className="flex flex-col items-center gap-4 mt-20">
+                          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(0,223,130,0.3)]" />
+                           <p className="text-primary font-bold uppercase tracking-widest text-xs animate-pulse">{t('summoning_lyrics')}</p>
                         </div>
                       ) : (
-                        <div className="text-center space-y-4">
-                           <p className="text-xl md:text-3xl font-black text-white/90 leading-relaxed whitespace-pre-wrap">
-                             {lyrics || t('no_lyrics')}
-                           </p>
-                           <p className="text-[10px] text-gray-500 italic pb-10">{t('lyrics_by')}</p>
+                        <div className="w-full bg-black/40 backdrop-blur-3xl border border-white/10 rounded-2xl p-4 md:p-8 shadow-3xl flex flex-col items-center space-y-4 max-h-[60vh] overflow-hidden relative">
+                          {isEditingLyrics ? (
+                            <div className="w-full flex flex-col space-y-4">
+                              <h3 className="text-sm font-mono font-black uppercase text-primary tracking-widest text-center">
+                                {language === 'es' ? 'Corregir Letra' : 'Correct Lyrics'}
+                              </h3>
+                              <p className="text-xs text-gray-400 text-center leading-relaxed">
+                                {language === 'es' 
+                                  ? 'Si la letra de la canción está incompleta, desincronizada o tiene errores, puedes corregirla aquí abajo para que se guarde de inmediato.'
+                                  : 'If the lyrics are incorrect or incomplete, edit or paste them here and save.'}
+                              </p>
+                              <textarea
+                                value={editedLyricsText}
+                                onChange={(e) => setEditedLyricsText(e.target.value)}
+                                className="w-full h-80 bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white/90 focus:outline-none focus:border-primary/50 font-mono resize-none focus:ring-1 focus:ring-primary/20"
+                                placeholder={language === 'es' ? "Escribe o pega la letra de la canción aquí..." : "Type or paste the song lyrics here..."}
+                              />
+                              <div className="flex gap-3 justify-center pt-2">
+                                <button
+                                  onClick={() => setIsEditingLyrics(false)}
+                                  className="px-5 py-2 rounded-full border border-white/10 text-xs font-black uppercase tracking-wider hover:bg-white/5 text-gray-400 hover:text-white transition-all active:scale-95"
+                                >
+                                  {language === 'es' ? 'Cancelar' : 'Cancel'}
+                                </button>
+                                <button
+                                  onClick={handleSaveLyrics}
+                                  className="px-6 py-2 rounded-full bg-primary text-black text-xs font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20"
+                                >
+                                  {language === 'es' ? 'Guardar Cambios' : 'Save Changes'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              {isSynced && parsedLines.length > 0 ? (
+                                <div 
+                                  ref={lyricsContainerRef}
+                                  className="w-full overflow-y-auto scrollbar-hide py-10 px-2 flex flex-col space-y-6 max-h-[40vh] relative select-none"
+                                  style={{
+                                    maskImage: 'linear-gradient(to bottom, transparent 0%, white 15%, white 85%, transparent 100%)',
+                                    WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, white 15%, white 85%, transparent 100%)'
+                                  }}
+                                >
+                                  {parsedLines.map((line, idx) => {
+                                    const isActive = idx === activeLineIndex;
+                                    const isPast = idx < activeLineIndex;
+                                    const auraGlowColor = auraColors[activeAura]?.border || '#00df82';
+                                    
+                                    return (
+                                      <div
+                                        key={idx}
+                                        data-lyric-idx={idx}
+                                        onClick={() => seekTo(line.time)}
+                                        style={isActive ? {
+                                          color: auraGlowColor,
+                                          textShadow: `0 0 20px ${auraGlowColor}80`
+                                        } : undefined}
+                                        className={`w-full text-center cursor-pointer py-2 px-3 rounded-lg transition-all duration-300 transform origin-center ${
+                                          isActive
+                                            ? 'text-lg md:text-2xl font-black opacity-100 scale-105'
+                                            : isPast
+                                              ? 'text-white/40 text-md md:text-xl font-bold opacity-60 hover:text-white/80 scale-95'
+                                              : 'text-white/20 text-sm md:text-lg font-bold opacity-35 hover:text-white/60 scale-90'
+                                        }`}
+                                      >
+                                        {line.text}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="w-full space-y-4 text-center select-text overflow-y-auto scrollbar-hide max-h-[40vh] py-4 px-2">
+                                  {(lyrics || t('no_lyrics')).split('\n').map((line, index) => {
+                                    const trimmed = line.trim();
+                                    if (!trimmed) {
+                                      return <div key={index} className="h-4" />;
+                                    }
+                                    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                                      return (
+                                        <span 
+                                          key={index} 
+                                          className="block text-[10px] md:text-xs font-mono font-black uppercase tracking-[0.25em] text-primary/85 pt-3 pb-1"
+                                        >
+                                          {trimmed}
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <motion.p 
+                                        key={index}
+                                        initial={{ opacity: 0, y: 15 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: Math.min(index * 0.01, 0.3) }}
+                                        className="text-md md:text-lg font-bold text-white/90 leading-relaxed tracking-tight hover:text-primary transition-colors cursor-default drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]"
+                                      >
+                                        {trimmed}
+                                      </motion.p>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              
+                              <div className="w-full border-t border-white/5 pt-4 text-center flex flex-col items-center">
+                                <span className="text-[8px] font-mono font-black uppercase tracking-[0.2em] text-[#00df82] px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
+                                  {isSynced ? 'LRCLIB Sync Master' : 'PureAudio Plain Mode'}
+                                </span>
+                                
+                                {lyricsAlbum && (
+                                  <p className="text-[10px] text-gray-400 mt-2 font-mono uppercase tracking-widest max-w-full truncate">
+                                    📀 {language === 'es' ? 'Álbum' : 'Album'}: {lyricsAlbum}
+                                  </p>
+                                )}
+
+                                <div className="flex gap-2 justify-center mt-2.5">
+                                  <button
+                                    onClick={() => {
+                                      setEditedLyricsText(lyrics || '');
+                                      setIsEditingLyrics(true);
+                                    }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-[9px] font-black uppercase tracking-[0.08em] text-white/70 hover:text-white transition-all border border-white/10 shadow-md"
+                                  >
+                                    ✏️ {language === 'es' ? 'Corregir Letra' : 'Correct Lyrics'}
+                                  </button>
+                                </div>
+                                <p className="text-[9px] text-gray-500 italic mt-2">{t('lyrics_by')}</p>
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                     </motion.div>
