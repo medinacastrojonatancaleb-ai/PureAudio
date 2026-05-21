@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Music2, UserPlus, UserCheck, Sparkles, Wand2, ArrowRight } from 'lucide-react';
+import { Play, Music2, UserPlus, UserCheck, Sparkles, Wand2, ArrowRight, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { usePlayer } from '../context/PlayerContext';
 import { youtubeService, YouTubeTrack } from '../services/youtubeService';
@@ -13,7 +13,8 @@ export default function HomeScreen() {
     toggleFollowArtist,
     likedTracks,
     toggleLike,
-    t
+    t,
+    language
   } = usePlayer();
   const [activeCategory, setActiveCategory] = useState('All');
   const [sections, setSections] = useState<{
@@ -29,6 +30,25 @@ export default function HomeScreen() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiResults, setAiResults] = useState<YouTubeTrack[]>([]);
   const [selectedAge, setSelectedAge] = useState<number | null>(null);
+
+  // Active mood chip override mapping
+  const [activeMoodChip, setActiveMoodChip] = useState('Chill');
+
+  // Animated placeholder state for the AI search input selector
+  const placeholders = [
+    language === 'es' ? 'Quiero música para manejar de noche...' : 'I want late night driving music...',
+    language === 'es' ? 'Necesito motivación para entrenar...' : 'Give me high energy workout tracks...',
+    language === 'es' ? 'Estoy triste pero quiero relajarme...' : 'I feel sad but need calming acoustics...',
+    language === 'es' ? 'Sintoniza algo para jugar con mis amigos...' : 'Futuristic beats for gaming sessions...'
+  ];
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [language]);
 
   const handleAiMood = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -116,10 +136,27 @@ export default function HomeScreen() {
 
   const allTracks = React.useMemo(() => [...sections.greeting, ...sections.trending, ...sections.mood], [sections]);
 
+  const triggerMoodSuggestion = async (moodPrompt: string, chipLabel: string) => {
+    setActiveMoodChip(chipLabel);
+    setAiPrompt(moodPrompt);
+    if (isGenerating) return;
+    setIsGenerating(true);
+    setAiResults([]);
+    try {
+      const tracks = await youtubeService.getAiMoodTracks(moodPrompt, selectedAge || undefined);
+      setAiResults(tracks);
+    } catch (err) {
+      console.error('AI Mood suggestion error:', err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="p-8 flex items-center justify-center min-h-[400px]">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="p-8 flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#00df82]">{language === 'es' ? 'SINTONIZANDO...' : 'TUNING FREQUENCY...'}</span>
       </div>
     );
   }
@@ -127,13 +164,13 @@ export default function HomeScreen() {
   if (error) {
     return (
       <div className="p-8 space-y-6 text-center max-w-lg mx-auto">
-        <div className="bg-white/5 p-12 rounded-3xl border border-white/10 space-y-4">
-           <Music2 size={48} className="mx-auto text-gray-500 opacity-20" />
+        <div className="bg-[#12151c]/60 backdrop-blur-2xl p-12 rounded-3xl border border-white/10 space-y-4 shadow-2xl">
+           <Music2 size={48} className="mx-auto text-[#ff2e54] opacity-80 animate-bounce" />
            <h1 className="text-xl font-bold">{t('something_wrong')}</h1>
-           <p className="text-gray-400 text-sm">Failed to load recommendations. Please try again later.</p>
+           <p className="text-gray-400 text-sm">Failed to load recommendations. Please check your internet link.</p>
            <button 
              onClick={() => window.location.reload()}
-             className="bg-white text-black px-6 py-2 rounded-full font-bold text-sm hover:scale-105 transition-transform"
+             className="bg-primary text-black px-6 py-2 rounded-full font-bold text-sm hover:scale-105 active:scale-95 transition-all shadow-xl shadow-primary/20"
            >
              {t('retry')}
            </button>
@@ -143,9 +180,39 @@ export default function HomeScreen() {
   }
 
   return (
-    <div className="space-y-8 pb-10">
-      {/* Categories */}
-      <div className="flex gap-2 sticky top-[-20px] bg-background/90 backdrop-blur-md pt-4 pb-2 z-10 px-4 md:px-6 -mx-4 md:-mx-6 border-b border-outline/10 overflow-x-auto scrollbar-hide">
+    <div className="space-y-10 pb-12 px-6">
+      {/* Millimetric Transparent Glassmorphism Header */}
+      <div className="flex justify-between items-center bg-[#050505]/20 backdrop-blur-md pt-4 pb-2 z-10 -mx-6 px-6 border-b border-white/[0.03] sticky top-[-20px]">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] leading-none">
+            {language === 'es' ? 'Buenas noches, Sandra' : 'Good evening, Sandra'}
+          </h1>
+          <p className="text-xs md:text-sm text-gray-400 font-medium mt-1">
+            {language === 'es' ? 'Tu vibra de esta noche se siente increíble ✨' : 'Your vibe tonight feels extraordinary ✨'}
+          </p>
+        </div>
+
+        {/* Pulse Glowing Profile Avatar */}
+        <motion.div 
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          className="relative w-12 h-12 rounded-full cursor-pointer flex-shrink-0 flex items-center justify-center p-[2px] transition-all"
+        >
+          {/* Intense neon circle halo */}
+          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-primary to-[#00cbff] opacity-80 animate-pulse blur-[4px] pointer-events-none" />
+          <div className="absolute inset-[3px] rounded-full bg-black z-0" />
+          
+          <img 
+            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80" 
+            alt="User profile" 
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover rounded-full relative z-10 border border-white/10"
+          />
+        </motion.div>
+      </div>
+
+      {/* Hero Category Filters */}
+      <div className="flex gap-2.5 overflow-x-auto scrollbar-hide py-1">
         {[
           { id: 'All', label: t('cat_all') },
           { id: 'Music', label: t('cat_music') },
@@ -155,195 +222,219 @@ export default function HomeScreen() {
           <button 
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
-            className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${activeCategory === cat.id ? 'bg-primary text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+            className={`px-5 py-2.5 rounded-full text-xs font-black tracking-wide uppercase transition-all ${
+              activeCategory === cat.id 
+                ? 'bg-gradient-to-r from-primary to-[#00eaae] text-black shadow-lg shadow-primary/20 scale-102' 
+                : 'bg-white/5 text-gray-300 hover:bg-white/10 border border-white/5'
+            }`}
           >
             {cat.label}
           </button>
         ))}
       </div>
 
-      {/* Greetings Grid */}
-      <header className="space-y-4">
-        <h1 className="text-3xl font-black tracking-tight">{t('greetings')}</h1>
+      {/* Giant "Magia IA" Hero section */}
+      <section className="relative rounded-[32px] overflow-hidden border border-white/10 shadow-2xl bg-gradient-to-br from-[#0c0f14] via-[#052119] to-[#041a1f]">
+        {/* Soft floating background light mesh */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-primary/10 rounded-full blur-[100px] pointer-events-none animate-pulse" />
+        <div className="absolute -left-10 bottom-0 w-60 h-60 bg-[#00cbff]/5 rounded-full blur-[80px] pointer-events-none" />
 
-        {/* AI Mood Magic Bar */}
-        <section className="relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-purple-500/10 to-primary/10 opacity-30 blur-2xl group-hover:opacity-50 transition-opacity duration-1000" />
-          <div className="relative bg-white/[0.03] border border-white/10 rounded-2xl p-6 space-y-4 shadow-2xl backdrop-blur-sm">
-            <div className="flex items-center gap-2">
-               <div className="bg-primary/20 p-2 rounded-lg text-primary">
-                  <Sparkles size={20} className="animate-pulse" />
-               </div>
-               <h2 className="text-xl font-black tracking-tight">{t('ai_mood')}</h2>
-            </div>
-            <p className="text-sm text-gray-400 max-w-lg">{t('ai_mood_desc')}</p>
+        <div className="p-8 space-y-6 relative z-10">
+          
+          {/* Header row containing rotating AI icon */}
+          <div className="flex items-center gap-4">
+            <motion.div 
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 12, ease: 'linear' }}
+              className="bg-primary/10 p-3.5 rounded-3xl text-primary border border-primary/20 shadow-[0_0_20px_rgba(0,223,130,0.2)]"
+            >
+              <Sparkles size={24} className="animate-pulse" />
+            </motion.div>
             
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 whitespace-nowrap">{t('target_age')}:</span>
-                <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-                  {[
-                    { label: t('age_kid'), val: 10 },
-                    { label: t('age_teen'), val: 16 },
-                    { label: t('age_genz'), val: 22 },
-                    { label: t('age_millennial'), val: 35 },
-                    { label: t('age_classic'), val: 55 }
-                  ].map((age) => (
-                    <button
-                      key={age.val}
-                      onClick={() => setSelectedAge(age.val === selectedAge ? null : age.val)}
-                      className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${
-                        selectedAge === age.val 
-                          ? 'bg-primary border-primary text-black' 
-                          : 'bg-white/5 border-white/10 text-gray-400 hover:border-white/30'
-                      }`}
-                    >
-                      {age.label}
-                    </button>
-                  ))}
-                </div>
+            <div className="space-y-1">
+              <h2 className="text-3xl font-black text-white tracking-tight font-sans">
+                {language === 'es' ? 'Magia IA' : 'Gemini Core Magic'}
+              </h2>
+              <p className="text-xs md:text-sm text-gray-300/90 tracking-wide">
+                {language === 'es' ? 'Describe cómo te sientes y Gemini creará la vibra perfecta para ti.' : 'Describe your physical emotional wave-state to formulate custom vibes.'}
+              </p>
+            </div>
+          </div>
+
+          {/* Interactive Mood selector chips container */}
+          <div className="space-y-3 pt-2">
+            <h3 className="text-[10px] font-mono font-black uppercase tracking-[0.25em] text-[#00df82]">
+              {language === 'es' ? 'Sintonía de Ánimo Estético' : 'Esthetic Frequency Channel'}
+            </h3>
+            <div className="flex gap-2.5 overflow-x-auto scrollbar-hide py-1">
+              {[
+                { label: 'Niño 🧸', val: 'Niño', prompt: 'Música divertida, infantil, alegre e instrumental' },
+                { label: 'Joven 🎒', val: 'Joven', prompt: 'Trap contemporáneo y pop juvenil moderno latino' },
+                { label: 'Gen Z 🎧', val: 'Gen Z', prompt: 'Hyperpop, phonk, dark pop and viral tik tok trends' },
+                { label: 'Gamer 🎮', val: 'Gamer', prompt: '8-bit synthwave, active gameplay beats, chill lofi gaming' },
+                { label: 'Focus 💻', val: 'Focus', prompt: 'Deep focal coding noise, synth sweeps, study background beats' },
+                { label: 'Gym ⚡', val: 'Gym', prompt: 'High energy heavy techno bass and motivating drill beats' },
+                { label: 'Chill 🌊', val: 'Chill', prompt: 'Quiet acoustic bedroom pop indie folk sunset' },
+                { label: 'Noche 🌌', val: 'Noche', prompt: 'Late night dark drive synthwave and retro pop' },
+                { label: 'Relax 🍵', val: 'Relax', prompt: 'Tibetan sound bowl resonance, ultra slow ambient waves' }
+              ].map((mood) => {
+                const isActive = activeMoodChip === mood.val;
+                return (
+                  <motion.button
+                    key={mood.val}
+                    type="button"
+                    onClick={() => triggerMoodSuggestion(mood.prompt, mood.val)}
+                    whileHover={{ scale: 1.06 }}
+                    whileTap={{ scale: 0.94 }}
+                    className={`px-4 py-2 text-[11px] font-bold uppercase rounded-full tracking-wider Transition-all whitespace-nowrap min-w-max border ${
+                      isActive 
+                        ? 'bg-primary text-black border-primary shadow-[0_0_20px_rgba(0,223,130,0.5)] font-black scale-104' 
+                        : 'bg-black/35 hover:bg-black/60 text-white border-white/5 hover:border-white/20'
+                    }`}
+                  >
+                    {mood.label}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Sparkly dynamic AI input */}
+          <form onSubmit={handleAiMood} className="space-y-4">
+            <div className="relative flex items-center bg-black/40 backdrop-blur-xl border border-white/5 hover:border-primary/40 focus-within:border-primary rounded-[22px] transition-all focus-within:ring-2 focus-within:ring-primary/15 shadow-inner">
+              <div className="absolute left-4.5 text-primary/70">
+                <Wand2 size={20} className="animate-pulse" />
               </div>
 
-              <form onSubmit={handleAiMood} className="relative flex items-center gap-2 max-w-2xl">
-              <div className="absolute left-4 text-gray-500">
-                <Wand2 size={16} />
-              </div>
+              {/* Input with animated placeholder text */}
               <input 
                 type="text"
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder={t('search_placeholder')}
+                placeholder={placeholders[placeholderIndex]}
                 disabled={isGenerating}
-                className="w-full bg-white/5 border border-white/5 hover:border-primary/30 focus:border-primary rounded-xl pl-10 pr-12 py-4 text-sm transition-all focus:outline-none focus:ring-1 focus:ring-primary/20 placeholder:text-gray-600 disabled:opacity-50"
+                className="w-full bg-transparent border-none py-4.5 pl-12 pr-32 text-sm text-white focus:outline-none placeholder:text-gray-500 font-medium"
               />
-              <button 
+
+              <motion.button 
                 type="submit"
                 disabled={!aiPrompt.trim() || isGenerating}
-                className="absolute right-2 px-4 py-2 bg-primary text-black rounded-lg font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all disabled:grayscale disabled:opacity-50 flex items-center gap-2"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="absolute right-2 px-5 py-2.5 bg-gradient-to-r from-primary to-[#00cbff] text-black rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-primary/20 disabled:grayscale disabled:opacity-40 flex items-center gap-1.5"
               >
                 {isGenerating ? (
-                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                  <div className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <>{t('magic')} <ArrowRight size={14} /></>
+                  <>MAGIA →</>
                 )}
-              </button>
-            </form>
-
-            <div className="flex flex-wrap gap-2 pt-2">
-              {[
-                { label: 'Rainy City 🌧️', prompt: 'Música melancólica para una ciudad lluviosa de noche' },
-                { label: 'Focus Flow 💻', prompt: 'Deep focus music for programming without lyrics' },
-                { label: 'Gym Hype ⚡', prompt: 'High energy phonk and electronic music for heavy lifting' },
-                { label: 'Sunset Chill 🌅', prompt: 'Vibras de atardecer en la playa, indie pop y surf rock' },
-                { label: 'Cyberpunk 🌆', prompt: 'Aggressive synthwave and industrial music for a dark future' }
-              ].map((mood) => (
-                <button
-                  key={mood.label}
-                  type="button"
-                  onClick={async () => {
-                    setAiPrompt(mood.prompt);
-                    // Explicitly call common function logic since we changed from a closure playTrack
-                    if (isGenerating) return;
-                    setIsGenerating(true);
-                    setAiResults([]);
-                    try {
-                      const tracks = await youtubeService.getAiMoodTracks(mood.prompt, selectedAge || undefined);
-                      setAiResults(tracks);
-                    } catch (err) {
-                      console.error('AI Generation error:', err);
-                    } finally {
-                      setIsGenerating(false);
-                    }
-                  }}
-                  className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-primary/20 border border-white/10 hover:border-primary/50 text-[10px] font-black uppercase tracking-wider transition-all"
-                >
-                  {mood.label}
-                </button>
-              ))}
+              </motion.button>
             </div>
+          </form>
 
-            {/* AI Results Section */}
-            <AnimatePresence>
-              {aiResults.length > 0 && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="pt-4 space-y-4 overflow-hidden"
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">{t('ai_mix')}</p>
-                    <button 
-                      onClick={() => playTrack(aiResults[0], aiResults)}
-                      className="flex items-center gap-2 text-[10px] font-black bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1 rounded-full transition-colors"
+          {/* AI Results Subsection render */}
+          <AnimatePresence>
+            {aiResults.length > 0 && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="pt-6 border-t border-white/5 space-y-4 overflow-hidden"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono font-black uppercase tracking-[0.25em] text-primary flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-ping" />
+                    {language === 'es' ? 'Mezcla Inteligente Gemini' : 'Gemini AI Sintonized Vibe'}
+                  </span>
+                  <button 
+                    onClick={() => playTrack(aiResults[0], aiResults)}
+                    className="flex items-center gap-1.5 text-[10px] font-black bg-primary/15 hover:bg-primary/25 text-primary px-3.5 py-1.5 rounded-full transition-all border border-primary/20"
+                  >
+                    <Play size={10} fill="currentColor" /> {t('play_all')}
+                  </button>
+                </div>
+                
+                <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-8 px-8">
+                  {aiResults.map((song) => (
+                    <motion.div 
+                      key={`ai-${song.id}`}
+                      onClick={() => playTrack(song, aiResults)}
+                      whileHover={{ y: -4 }}
+                      whileTap={{ scale: 0.96 }}
+                      className="min-w-[130px] w-36 space-y-2 cursor-pointer group"
                     >
-                      <Play size={10} fill="currentColor" /> {t('play_all')}
-                    </button>
-                  </div>
-                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-4 md:-mx-6 px-4 md:px-6">
-                    {aiResults.map((song) => (
-                      <motion.div 
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        key={`ai-${song.id}`}
-                        onClick={() => playTrack(song, aiResults)}
-                        className="min-w-[120px] w-32 space-y-2 cursor-pointer group"
-                      >
-                        <div className="relative aspect-square rounded-xl overflow-hidden shadow-xl ring-1 ring-white/5">
-                          <img src={song.thumbnail} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <Play size={24} fill="white" stroke="white" />
+                      <div className="relative aspect-square rounded-[20px] overflow-hidden shadow-2xl border border-white/5 bg-[#12151c]">
+                        <img src={song.thumbnail} alt="" className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-black shadow-lg">
+                            <Play size={16} fill="currentColor" className="ml-0.5" />
                           </div>
                         </div>
-                        <h4 className="text-[11px] font-bold line-clamp-2 leading-tight group-hover:text-primary transition-colors">{song.title}</h4>
-                      </motion.div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-xs font-black text-white line-clamp-1 group-hover:text-primary transition-colors leading-snug">{song.title}</h4>
+                        <p className="text-[10px] font-bold text-gray-500 truncate leading-tight">{song.artist}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sections.greeting.map((song) => (
-            <motion.div 
-              whileHover={{ scale: 1.02, backgroundColor: 'var(--color-surfaceVariant)' }}
-              whileTap={{ scale: 0.98 }}
-              key={`greeting-${song.id}`}
-              onClick={() => playTrack(song, allTracks)}
-              className={`flex items-center gap-4 bg-surface/40 hover:bg-surfaceVariant/60 border border-outline/35 transition-all rounded-xl overflow-hidden group cursor-pointer h-20 shadow-lg ${
-                currentTrack?.id === song.id ? 'bg-surfaceVariant border-primary/30 shadow-[0_4px_20px_rgb(0,223,130,0.05)]' : ''
-              }`}
-            >
-              <div className="w-20 h-20 flex-shrink-0 relative">
-                <img src={song.thumbnail} alt="" className="w-full h-full object-cover shadow-xl" referrerPolicy="no-referrer" />
-                <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors" />
-              </div>
-              <div className="flex-1 min-w-0 pr-4">
-                <h3 className={`font-black text-sm md:text-base truncate ${currentTrack?.id === song.id ? 'text-primary' : 'text-white'}`}>{song.title}</h3>
-              </div>
-              <div className={`pr-4 ${currentTrack?.id === song.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-all transform translate-x-2 group-hover:translate-x-0`}>
-                 <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-black shadow-primary/20 shadow-xl scale-90 group-hover:scale-100 transition-transform">
-                    <Play size={20} fill="currentColor" />
-                 </div>
-              </div>
-            </motion.div>
-          ))}
-        </section>
-      </header>
+      {/* Primary Track recommendations listing */}
+      <section className="space-y-5">
+        <h2 className="text-xl md:text-2xl font-black text-white tracking-tight font-sans">
+          {language === 'es' ? 'Recomendado para Sandra' : 'Curated for Sandra'}
+        </h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sections.greeting.map((song) => {
+            const isPlayingThis = currentTrack?.id === song.id;
+            return (
+              <motion.div 
+                key={`greeting-${song.id}`}
+                onClick={() => playTrack(song, allTracks)}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                className={`flex items-center gap-4 bg-[#0b0c0f]/70 hover:bg-[#12151c]/90 border border-white/[0.04] transition-all rounded-2xl overflow-hidden group cursor-pointer p-2.5 shadow-lg relative ${
+                  isPlayingThis ? 'border-primary/30 bg-[#12151c]/90 shadow-[0_0_24px_rgba(0,223,130,0.06)]' : ''
+                }`}
+              >
+                <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 relative">
+                  <img src={song.thumbnail} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors" />
+                </div>
+                <div className="flex-1 min-w-0 pr-2">
+                  <h3 className={`font-black text-sm truncate leading-snug ${isPlayingThis ? 'text-primary' : 'text-white'}`}>
+                    {song.title}
+                  </h3>
+                  <p className="text-[11px] font-bold text-gray-500 truncate leading-tight mt-0.5">{song.artist}</p>
+                </div>
+                
+                <div className={`pr-2 ${isPlayingThis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-all`}>
+                  <div className="w-9 h-9 bg-primary text-black rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all">
+                    <Play size={16} fill="currentColor" className="ml-0.5" />
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </section>
 
-      {/* Jump back in */}
+      {/* Jump back in Slider */}
       {sections.trending.length > 0 && (
-        <section className="space-y-6 pt-4">
+        <section className="space-y-5 pt-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-black tracking-tight">{t('jump_back_in')}</h2>
-            <button className="text-gray-400 text-xs font-bold uppercase tracking-widest hover:underline">{t('show_all')}</button>
+            <h2 className="text-xl md:text-2xl font-black text-white tracking-tight font-sans">{t('jump_back_in')}</h2>
+            <button className="text-gray-500 text-xs font-black uppercase tracking-widest hover:text-white transition-colors">{t('show_all')}</button>
           </div>
-          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 md:-mx-6 px-4 md:px-6">
+          <div className="flex gap-5 overflow-x-auto pb-4 scrollbar-hide -mx-6 px-6">
             {sections.trending.map((song) => (
-              <div key={`jump-${song.id}`} className="min-w-[170px] sm:min-w-[190px] w-44 sm:w-48 flex-shrink-0">
+              <div key={`jump-${song.id}`} className="min-w-[160px] sm:min-w-[185px] w-42 sm:w-46 flex-shrink-0">
                 <AudioTrackGridCard 
                   track={song}
                   isActive={currentTrack?.id === song.id}
@@ -361,14 +452,14 @@ export default function HomeScreen() {
         </section>
       )}
 
-      {/* Mood */}
+      {/* Generic Mood Slider */}
       {sections.mood.length > 0 && (
-        <section className="space-y-6 pt-4">
+        <section className="space-y-5 pt-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-black tracking-tight">{t('mood')}</h2>
-            <button className="text-gray-400 text-xs font-bold uppercase tracking-widest hover:underline">{t('show_all')}</button>
+            <h2 className="text-xl md:text-2xl font-black text-white tracking-tight font-sans">{t('mood')}</h2>
+            <button className="text-gray-500 text-xs font-black uppercase tracking-widest hover:text-white transition-colors">{t('show_all')}</button>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
             {sections.mood.map((song) => (
               <AudioTrackGridCard 
                 key={`mood-${song.id}`}

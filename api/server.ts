@@ -43,19 +43,28 @@ export async function createServer() {
   async function generateWithFallback(params: any) {
     const models = [
       "gemini-3.5-flash",
-      "gemini-3-flash-preview",
       "gemini-3.1-flash-lite",
-      "gemini-flash-latest",
-      "gemini-2.5-flash",
-      "gemini-2.0-flash"
+      "gemini-2.5-flash"
     ];
     let lastError = null;
     for (const model of models) {
       try {
         console.log(`[Server] Trying generative AI model: ${model}`);
+        
+        // Only include thinkingConfig for Gemini 3 series models
+        const config: any = {
+          ...params.config,
+        };
+        if (model.startsWith("gemini-3")) {
+          config.thinkingConfig = {
+            thinkingLevel: "MINIMAL"
+          };
+        }
+
         const response = await genAI.models.generateContent({
           ...params,
           model,
+          config
         });
         if (response && response.text) {
           console.log(`[Server] Model ${model} succeeded!`);
@@ -183,6 +192,14 @@ export async function createServer() {
     const { prompt, age } = req.body;
     if (!prompt) return res.status(400).json({ error: "Prompt is required" });
 
+    // 1. Check mood cache for near-instant return on same query
+    const cacheKey = `ai_mood_${prompt.toLowerCase().trim()}_${age || 'any'}`;
+    const cached = getCached(cacheKey);
+    if (cached) {
+      console.log(`[Server] Returning cached AI recommendations for: ${prompt}`);
+      return res.json(cached);
+    }
+
     let aiTracksList: any[] = [];
     let usedFallback = false;
 
@@ -194,7 +211,7 @@ export async function createServer() {
       const response = await generateWithFallback({
         contents: [{ role: 'user', parts: [{ text: `Act as a professional and responsible music curator. 
         User is ${age ? age + " years old" : "an adult"}.
-        Based on the following mood or description: "${prompt}", suggest 8 real songs that fit perfectly.
+        Based on the following mood or description: "${prompt}", suggest 5 real songs that fit perfectly.
 
         CRITICAL SAFETY RULES:
         - Suggest ONLY clean, non-explicit songs.
@@ -232,23 +249,31 @@ export async function createServer() {
       // If we used fallback, it already has valid IDs and metadata. Return directly!
       if (usedFallback) {
         console.log("[Server] Returning pre-cached falling fallback list immediately.");
+        setCache(cacheKey, aiTracksList);
         return res.json(aiTracksList);
       }
 
-      // Now search each track on YouTube
+      // Now search each track on YouTube (using caching on per-track level as well!)
       const tracks = await Promise.all(
-        aiTracksList.slice(0, 8).map(async (t: { title: string; artist: string }) => {
+        aiTracksList.slice(0, 5).map(async (t: { title: string; artist: string }) => {
+          const trackKey = `yt_track_${(t.title + " " + t.artist).toLowerCase().trim()}`;
+          const cachedTrack = getCached(trackKey);
+          if (cachedTrack) {
+            return cachedTrack;
+          }
           try {
             const search = await ytSearch(`${t.title} ${t.artist}`);
             const video = search.videos[0];
             if (video) {
-              return {
+              const trackData = {
                 id: video.videoId,
                 title: video.title,
                 artist: video.author?.name || t.artist,
                 thumbnail: video.image,
                 duration: video.timestamp
               };
+              setCache(trackKey, trackData);
+              return trackData;
             }
             return null;
           } catch (e) {
@@ -260,13 +285,18 @@ export async function createServer() {
       const filteredTracks = tracks.filter(t => t !== null);
       if (filteredTracks.length === 0) {
         console.log("[Server] Live YouTube searches returned zero results under rate limit. Falling back to pre-cached thematic tracks.");
-        return res.json(getThematicFallback(prompt));
+        const fallbackList = getThematicFallback(prompt);
+        setCache(cacheKey, fallbackList);
+        return res.json(fallbackList);
       }
 
+      setCache(cacheKey, filteredTracks);
       res.json(filteredTracks);
     } catch (error) {
       console.warn("[Server] YouTube search execution threw an error, returning pre-cached thematic tracks gracefully:", error);
-      res.json(getThematicFallback(prompt));
+      const fallbackList = getThematicFallback(prompt);
+      setCache(cacheKey, fallbackList);
+      res.json(fallbackList);
     }
   });
 

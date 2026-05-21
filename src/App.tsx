@@ -2,19 +2,18 @@ import React, { useState } from 'react';
 import { 
   Home, Search, Library, PlayCircle, PauseCircle, Music2, Heart, History, User,
   ChevronDown, MoreHorizontal, SkipBack, SkipForward, Play, Pause, Volume2, Share2,
-  Shuffle, Repeat, Repeat1, ListMusic, Volume1, VolumeX, UserPlus, UserCheck
+  Shuffle, Repeat, Repeat1, ListMusic, Volume1, VolumeX, UserPlus, UserCheck, TrendingUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import HomeScreen from './screens/HomeScreen';
 import SearchScreen from './screens/SearchScreen';
 import LibraryScreen from './screens/LibraryScreen';
+import StatsScreen from './screens/StatsScreen';
 import { usePlayer } from './context/PlayerContext';
 import YouTubePlayer from './components/YouTubePlayer';
 import { youtubeService } from './services/youtubeService';
 import AuthModal from './components/AuthModal';
 import { WaveformVisualizer, RotatingVinyl } from './components/AestheticEnhancements';
-import { aiHealerService } from './services/AiHealerService';
-import AiHealerCockpit from './components/AiHealerCockpit';
 import { ShieldAlert, Cpu, Sparkles } from 'lucide-react';
 
 import ErrorBoundary from './components/ErrorBoundary';
@@ -33,6 +32,46 @@ function AppContent() {
   const [showLyrics, setShowLyrics] = useState(false);
   const [lyrics, setLyrics] = useState<string>('');
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
+  const [isIntroActive, setIsIntroActive] = useState(true);
+  const [activeAura, setActiveAura] = useState('cyber');
+
+  // Sparkly floating particles arrays
+  const [particles] = useState(() => 
+    Array.from({ length: 24 }).map((_, i) => ({
+      id: i,
+      size: Math.random() * 2.5 + 1,
+      left: Math.random() * 100,
+      animDuration: Math.random() * 12 + 8,
+      delay: Math.random() * 4,
+    }))
+  );
+
+  // Aura details mapping
+  const auraColors: Record<string, { radial: string; border: string }> = {
+    cyber: { radial: 'radial-gradient(circle at 50% 12%, rgba(0, 223, 130, 0.1) 0%, transparent 65%)', border: '#00df82' },
+    cosmic: { radial: 'radial-gradient(circle at 50% 12%, rgba(0, 203, 255, 0.1) 0%, transparent 65%)', border: '#00cbff' },
+    phoenix: { radial: 'radial-gradient(circle at 50% 12%, rgba(255, 46, 84, 0.1) 0%, transparent 65%)', border: '#ff2e54' },
+    retro: { radial: 'radial-gradient(circle at 50% 12%, rgba(217, 70, 239, 0.1) 0%, transparent 65%)', border: '#d946ef' },
+  };
+
+  // Hide introductory splash screen after 1.5s (satisfying transition requirement)
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsIntroActive(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Listen to the stats manual override auras
+  React.useEffect(() => {
+    const handleAuraChange = (e: any) => {
+      if (e.detail) {
+        setActiveAura(e.detail);
+      }
+    };
+    window.addEventListener('app-aura-changed', handleAuraChange);
+    return () => window.removeEventListener('app-aura-changed', handleAuraChange);
+  }, []);
 
   const { 
     currentTrack, 
@@ -68,7 +107,34 @@ function AppContent() {
     setAuthModalOpen
   } = usePlayer();
 
-  const [isHealerCockpitOpen, setIsHealerCockpitOpen] = useState(false);
+  // Emotional music reactive Aura Mode (auto calibrates overlay according to metadata keywords!)
+  React.useEffect(() => {
+    if (!currentTrack) return;
+    const title = currentTrack.title.toLowerCase();
+    const artist = currentTrack.artist.toLowerCase();
+    
+    // Auto shift auras based on mood keywords
+    if (
+      title.includes('rain') || title.includes('sad') || title.includes('triste') || 
+      title.includes('lluvia') || title.includes('chill') || title.includes('slow') || 
+      title.includes('relax') || artist.includes('ed maverick')
+    ) {
+      setActiveAura('cosmic');
+    } else if (
+      title.includes('gym') || title.includes('hype') || title.includes('lift') || 
+      title.includes('phonk') || title.includes('heavy') || title.includes('electronic') || 
+      title.includes('cyber') || title.includes('electro')
+    ) {
+      setActiveAura('phoenix');
+    } else if (
+      title.includes('retro') || title.includes('love') || title.includes('amor') || 
+      title.includes('pop') || title.includes('classic') || title.includes('rose')
+    ) {
+      setActiveAura('retro');
+    } else {
+      setActiveAura('cyber');
+    }
+  }, [currentTrack?.id]);
 
   const fetchLyrics = async () => {
     if (!currentTrack) return;
@@ -84,13 +150,83 @@ function AppContent() {
     }
   };
 
-  const copyShareLink = () => {
-    if (!currentTrack) return;
-    const url = `https://www.youtube.com/watch?v=${currentTrack.id}`;
-    navigator.clipboard.writeText(url).then(() => {
-      notify(t('link_copied'), 'info');
-    });
+  const shareTrack = (track: any) => {
+    if (!track) return;
+    const url = `${window.location.origin}${window.location.pathname}?trackId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&thumbnail=${encodeURIComponent(track.thumbnail || '')}`;
+    
+    const fallbackCopy = (text: string) => {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.top = "0";
+      textArea.style.left = "0";
+      textArea.style.width = "2em";
+      textArea.style.height = "2em";
+      textArea.style.padding = "0";
+      textArea.style.border = "none";
+      textArea.style.outline = "none";
+      textArea.style.boxShadow = "none";
+      textArea.style.background = "transparent";
+      textArea.style.opacity = "0";
+      
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      try {
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        if (successful) {
+          notify(t('link_copied'), 'success');
+        } else {
+          notify('Por favor, copia este enlace: ' + text, 'info');
+        }
+      } catch (err) {
+        document.body.removeChild(textArea);
+        console.error('Fallback copy failed:', err);
+        notify('No se pudo copiar, enlace: ' + text, 'info');
+      }
+    };
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(() => {
+        notify(t('link_copied'), 'success');
+      }).catch((err) => {
+        console.warn('Clipboard API failed, trying fallback:', err);
+        fallbackCopy(url);
+      });
+    } else {
+      fallbackCopy(url);
+    }
   };
+
+  // Check for shared track in URL query parameters on load
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const trackId = params.get('trackId') || params.get('track');
+    if (trackId) {
+      const title = params.get('title') || 'Shared Track';
+      const artist = params.get('artist') || 'Unknown Artist';
+      const thumbnail = params.get('thumbnail') || '';
+      
+      const track = {
+        id: trackId,
+        title,
+        artist,
+        thumbnail,
+      };
+      
+      playTrack(track);
+      
+      // Clean up the URL query parameters so page refreshes don't re-trigger it
+      try {
+        const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      } catch (err) {
+        console.error('Failed to clear URL parameter:', err);
+      }
+    }
+  }, [playTrack]);
 
   // Reset lyrics view when track changes & Auto-expand player
   React.useEffect(() => {
@@ -113,24 +249,7 @@ function AppContent() {
   const handlePlayerError = async (code: number) => {
     console.error('Player error code:', code);
     
-    // Deploy AI Sentinel healing response
-    const errorDetails = `YouTube playback returned status code ${code} for track "${currentTrack?.title || 'Unknown'}" by ${currentTrack?.artist || 'Unknown'}`;
-    const wasHealed = await aiHealerService.healActivePlayback(
-      {
-        currentTrack,
-        playTrack: (track) => playTrack(track, queue),
-        nextTrack,
-        notify: (msg, type) => notify(msg, type)
-      },
-      errorDetails
-    );
-
-    if (wasHealed) {
-      console.log('[AI Sentinel] Automatic playback anomaly self-healing process complete.');
-      return;
-    }
-
-    // Classic fallback if healer wasn't active
+    // Classic fallback to ensure robust playback if restricted
     if ([101, 150].includes(code) && currentTrack) {
       console.warn(`Track ${currentTrack.title} is restricted. Searching for alternative...`);
       try {
@@ -154,6 +273,7 @@ function AppContent() {
       case 'home': return <HomeScreen />;
       case 'search': return <SearchScreen />;
       case 'library': return <LibraryScreen />;
+      case 'stats': return <StatsScreen />;
       default: return <HomeScreen />;
     }
   };
@@ -161,7 +281,83 @@ function AppContent() {
   const isLiked = currentTrack ? likedTracks.some(t => t.id === currentTrack.id) : false;
 
   return (
-    <div className="flex h-screen bg-background text-onBackground overflow-hidden font-sans select-none">
+    <div 
+      className="flex h-screen text-onBackground overflow-hidden font-sans select-none relative"
+      style={{ 
+        backgroundColor: '#050505',
+        backgroundImage: `${auraColors[activeAura]?.radial}, radial-gradient(circle at 90% 80%, rgba(0, 203, 255, 0.05) 0%, transparent 60%)`,
+        backgroundAttachment: 'fixed',
+      }}
+    >
+      {/* Intro Cinematográfico (Transition from deep black to neon aura) */}
+      <AnimatePresence>
+        {isIntroActive && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ 
+              opacity: 0, 
+              y: -50,
+              filter: 'blur(20px)',
+              transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] }
+            }}
+            className="fixed inset-0 bg-[#050505] z-[9999] flex flex-col items-center justify-center overflow-hidden"
+          >
+            {/* Pulsing Aura lights */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary/20 rounded-full blur-[110px] animate-pulse" />
+            <div className="absolute top-1/3 left-1/3 w-64 h-64 bg-[#00cbff]/10 rounded-full blur-[80px] animate-pulse" />
+
+            <div className="text-center z-10 flex flex-col items-center gap-4">
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+                className="w-20 h-20 bg-gradient-to-tr from-primary to-[#00cbff] rounded-[24px] flex items-center justify-center p-0.5 shadow-[0_0_50px_rgba(3,221,130,0.4)]"
+              >
+                <div className="w-full h-full bg-[#050505] rounded-[22px] flex items-center justify-center">
+                  <Play size={36} fill="#00df82" className="text-primary ml-1" />
+                </div>
+              </motion.div>
+              <div className="space-y-1">
+                <motion.h1 
+                  initial={{ tracking: '-0.05em', opacity: 0 }}
+                  animate={{ tracking: '-0.02em', opacity: 1 }}
+                  transition={{ delay: 0.2, duration: 0.8 }}
+                  className="text-4xl font-black bg-gradient-to-r from-primary via-[#00cbff] to-white bg-clip-text text-transparent"
+                >
+                  VIBESONIC
+                </motion.h1>
+                <p className="text-[10px] font-mono font-bold uppercase tracking-[0.3em] text-gray-500">
+                  {language === 'es' ? 'Sintonizando Multiverso' : 'Calibrating Soundscape'}
+                </p>
+              </div>
+            </div>
+
+            {/* Float details */}
+            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-[9px] font-mono text-gray-600 uppercase tracking-widest text-center select-none">
+              ULTRA PREMIUM SYSTEM v2.4
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Aura Particles */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-10">
+        {particles.map((p) => (
+          <div
+            key={p.id}
+            className="absolute bg-white rounded-full opacity-0"
+            style={{
+              width: p.size,
+              height: p.size,
+              left: `${p.left}%`,
+              bottom: '-5%',
+              boxShadow: `0 0 8px #fff`,
+              animation: `particlesRise ${p.animDuration}s linear infinite`,
+              animationDelay: `${p.delay}s`,
+            }}
+          />
+        ))}
+      </div>
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-80 bg-surface m-2 rounded-xl border border-outline/30 overflow-hidden shadow-2xl flex-shrink-0">
         <div className="pt-6 px-6 flex items-center gap-3">
@@ -184,30 +380,13 @@ function AppContent() {
             icon={<Search size={28} />} 
             label={t('search')} 
           />
+          <SidebarNavButton 
+            active={activeTab === 'stats'} 
+            onClick={() => setActiveTab('stats')} 
+            icon={<TrendingUp size={28} />} 
+            label={language === 'es' ? 'Mi Vibra' : 'My Vibe'} 
+          />
         </nav>
-
-        {/* AI Sentinel Controller Console Option */}
-        <div className="px-6 pb-2">
-          <button
-            onClick={() => setIsHealerCockpitOpen(true)}
-            className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-primary/5 hover:bg-primary/10 border border-primary/20 hover:border-primary/40 transition-all text-left group relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-16 h-16 bg-primary/5 rounded-full blur-xl pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl text-primary animate-pulse flex-shrink-0">
-                <Cpu size={18} />
-              </div>
-              <div>
-                <p className="text-xs font-black text-white hover:text-primary transition-colors tracking-tight">Sentinel AI</p>
-                <p className="text-[10px] text-gray-400 font-medium font-sans">Automated Self-Healer</p>
-              </div>
-            </div>
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-            </span>
-          </button>
-        </div>
 
         <div className="flex-1 overflow-hidden flex flex-col px-6">
            <header className="flex items-center justify-between mb-4 mt-2">
@@ -312,15 +491,7 @@ function AppContent() {
              )}
              <span onClick={() => currentTrack && setIsExpanded(true)} className="font-black text-xl bg-gradient-to-r from-primary via-[#00eae6] to-[#00abff] bg-clip-text text-transparent tracking-tighter cursor-pointer">VibeSonic</span>
              
-             {/* Dynamic Sentinel AI operating node on cellular */}
-             <button
-               onClick={() => setIsHealerCockpitOpen(true)}
-               className="p-1 px-2 rounded-full bg-primary/10 border border-primary/20 text-primary animate-pulse flex items-center gap-1 text-[9px] font-black uppercase font-mono tracking-tight"
-               title="AI Code Sentinel Status"
-             >
-               <Cpu size={11} className="animate-spin" style={{ animationDuration: '6s' }} />
-               <span>IA Sentinel</span>
-             </button>
+
           </div>
 
           <div className="flex items-center gap-3 ml-auto">
@@ -595,6 +766,12 @@ function AppContent() {
           label={t('search')} 
         />
         <NavButton 
+          active={activeTab === 'stats'} 
+          onClick={() => setActiveTab('stats')} 
+          icon={<TrendingUp size={22} />} 
+          label={language === 'es' ? 'Mi Vibra' : 'My Vibe'} 
+        />
+        <NavButton 
           active={activeTab === 'library'} 
           onClick={() => setActiveTab('library')} 
           icon={<Library size={22} />} 
@@ -795,11 +972,7 @@ function AppContent() {
                         <Music2 className="w-4 h-4 xs:w-5 xs:h-5" />
                       </button>
                       <button 
-                        onClick={() => {
-                          const url = `https://www.youtube.com/watch?v=${currentTrack.id}`;
-                          navigator.clipboard.writeText(url);
-                          notify(t('link_copied'), 'info');
-                        }}
+                        onClick={() => shareTrack(currentTrack)}
                         className="p-2 xs:p-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
                       >
                         <Share2 className="w-4 h-4 xs:w-5 xs:h-5" />
@@ -815,9 +988,6 @@ function AppContent() {
       
       {/* Auth Modal Component */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />
-
-      {/* Invisible AI Active Code Sentinel dashboard */}
-      <AiHealerCockpit isOpen={isHealerCockpitOpen} onClose={() => setIsHealerCockpitOpen(false)} />
     </div>
   );
 }

@@ -1,40 +1,46 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #00df82; /* High fidelity vivid luminous green */
+  --color-primary: #00df82; /* Vivid neon green laser marker */
   --color-onPrimary: #011E13;
   
-  --color-background: #010B08; /* Extremely deep black-green */
+  --color-background: #050505; /* Deep black space core */
   --color-onBackground: #F1FDFB;
   
-  --color-surface: #021611; /* Luxurious deep forest green panel */
+  --color-surface: #090b0e; /* Cyberpunk minimal card panel base */
   --color-onSurface: #F0FBF8;
-  --color-surfaceVariant: #03251D; /* Card active/hover forest green as seen in screenshot */
+  --color-surfaceVariant: #12151c; /* Refined high-contrast slot */
   --color-onSurfaceVariant: #8EB2A9;
   
-  --color-outline: #063529; /* Refined thin border/outlines */
+  --color-outline: rgba(255, 255, 255, 0.08); /* Refined glass thin slice outline */
   
-  --radius-xl: 14px;
-  --radius-2xl: 20px;
+  --radius-xl: 16px;
+  --radius-2xl: 28px;
 }
 
 @layer base {
   body {
-    @apply bg-background text-onBackground selection:bg-primary/20;
+    @apply bg-background text-onBackground selection:bg-primary/20 overflow-x-hidden;
+    background-color: #050505;
+    background-image: 
+      radial-gradient(circle at 10% 20%, rgba(0, 223, 130, 0.05) 0%, transparent 60%),
+      radial-gradient(circle at 90% 80%, rgba(0, 203, 255, 0.05) 0%, transparent 60%);
+    background-attachment: fixed;
     -webkit-tap-highlight-color: transparent;
   }
 }
 
+/* Material Futuristic Components design rules */
 .material-card {
-  @apply bg-white/50 backdrop-blur-md border border-outline/10 rounded-xl overflow-hidden transition-all duration-300;
+  @apply bg-black/40 backdrop-blur-3xl border border-white/5 rounded-2xl overflow-hidden transition-all duration-300 shadow-2xl;
 }
 
 .material-button {
-  @apply px-6 py-2.5 rounded-full font-medium transition-all active:scale-95 disabled:opacity-50;
+  @apply px-6 py-2.5 rounded-full font-bold transition-all active:scale-95 disabled:opacity-50 select-none cursor-pointer;
 }
 
 .m3-input {
-  @apply bg-surfaceVariant/50 border-b border-outline px-4 py-3 focus:border-primary outline-none transition-all;
+  @apply bg-white/5 border border-white/5 px-4 py-3 rounded-xl focus:border-primary/50 outline-none transition-all duration-300;
 }
 
 @layer utilities {
@@ -48,10 +54,73 @@
 
   @keyframes visualizer {
     0%, 100% { height: 15%; }
-    50% { height: 50%; }
+    50% { height: 75%; }
   }
 
   .animate-visualizer {
-    animation: visualizer 0.6s ease-in-out infinite;
+    animation: visualizer 0.5s ease-in-out infinite;
+  }
+  
+  /* Futuristic Cinematic floating and rise animation states */
+  @keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-12px) rotate(1deg); }
+  }
+  
+  @keyframes auraPulse {
+    0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.25; }
+    50% { transform: scale(1.15) rotate(180deg); opacity: 0.45; }
+  }
+
+  @keyframes particlesRise {
+    0% { transform: translateY(120%) scale(0.6); opacity: 0; }
+    50% { opacity: 0.5; }
+    100% { transform: translateY(-20%) scale(1.2); opacity: 0; }
+  }
+
+  @keyframes sheenSweep {
+    0% { left: -100%; }
+    100% { left: 200%; }
+  }
+
+  .animate-float {
+    animation: float 8s ease-in-out infinite;
+  }
+
+  .animate-aura-pulse {
+    animation: auraPulse 14s ease-in-out infinite;
+  }
+
+  .animate-sheen {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .animate-sheen::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.08) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: skewX(-25deg);
+    animation: sheenSweep 4s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  /* Fade transitions */
+  @keyframes fadeInBlur {
+    from { opacity: 0; filter: blur(10px); }
+    to { opacity: 1; filter: blur(0px); }
+  }
+
+  .animate-fade-in-blur {
+    animation: fadeInBlur 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 }
