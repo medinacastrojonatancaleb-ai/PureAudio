@@ -8,6 +8,7 @@ interface YouTubePlayerProps {
   volume: number;
   onTrackEnd?: () => void;
   onError?: (errorCode: number) => void;
+  isHidden?: boolean;
 }
 
 const PLAYER_STATES = {
@@ -24,7 +25,8 @@ export default function YouTubePlayer({
   isPlaying, 
   volume, 
   onTrackEnd, 
-  onError 
+  onError,
+  isHidden = false
 }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null);
   const [isReady, setIsReady] = useState(false);
@@ -195,7 +197,9 @@ export default function YouTubePlayer({
   }
 
   return (
-    <div className="fixed bottom-4 right-4 w-16 h-16 opacity-100 overflow-hidden z-[100] border border-white/10 rounded-xl bg-black">
+    <div className={`fixed bottom-4 right-4 w-16 h-16 overflow-hidden z-[100] border border-white/10 rounded-xl bg-black transition-all duration-300 ${
+      isHidden ? 'opacity-0 scale-0 pointer-events-none' : 'opacity-100 scale-100 shadow-[0_4px_20px_rgba(0,0,0,0.5)]'
+    }`}>
       <YouTube 
         videoId={videoId} 
         opts={opts} 

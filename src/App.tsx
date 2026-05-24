@@ -2,19 +2,26 @@ import React, { useState } from 'react';
 import { 
   Home, Search, Library, PlayCircle, PauseCircle, Music2, Heart, History, User,
   ChevronDown, MoreHorizontal, SkipBack, SkipForward, Play, Pause, Volume2, Share2,
-  Shuffle, Repeat, Repeat1, ListMusic, Volume1, VolumeX, UserPlus, UserCheck, TrendingUp
+  Shuffle, Repeat, Repeat1, ListMusic, Volume1, VolumeX, UserPlus, UserCheck, TrendingUp,
+  Video, MessageSquare, Menu, Smartphone, X, Flame, ShieldAlert, Cpu, Sparkles, Languages,
+  Radio, Film
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import HomeScreen from './screens/HomeScreen';
 import SearchScreen from './screens/SearchScreen';
+import VideoEditorScreen from './screens/VideoEditorScreen';
+import MusicRoomsScreen from './screens/MusicRoomsScreen';
 import LibraryScreen from './screens/LibraryScreen';
 import StatsScreen from './screens/StatsScreen';
+import TikTokFeedScreen from './screens/TikTokFeedScreen';
+import SocialScreen from './screens/SocialScreen';
+import LiveStreamScreen from './screens/LiveStreamScreen';
+import ChatScreen from './screens/ChatScreen';
 import { usePlayer } from './context/PlayerContext';
 import YouTubePlayer from './components/YouTubePlayer';
 import { youtubeService } from './services/youtubeService';
 import AuthModal from './components/AuthModal';
 import { WaveformVisualizer, RotatingVinyl } from './components/AestheticEnhancements';
-import { ShieldAlert, Cpu, Sparkles } from 'lucide-react';
 
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -98,11 +105,29 @@ function AppContent() {
     setLanguage,
     t,
     isAuthModalOpen,
-    setAuthModalOpen
+    setAuthModalOpen,
+    registerFallback
   } = usePlayer();
 
   const [activeTab, setActiveTab] = useState('home');
+  const activeTabRef = React.useRef(activeTab);
+  React.useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [useDeviceFrame, setUseDeviceFrame] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Track failed videos and safe consecutive fallbacks to prevent infinite loops
+  const failedVideoIdsRef = React.useRef<Set<string>>(new Set());
+  const consecutiveFallbackCountRef = React.useRef<number>(0);
+
+  React.useEffect(() => {
+    if (currentTrack?.id && !failedVideoIdsRef.current.has(currentTrack.id)) {
+      consecutiveFallbackCountRef.current = 0;
+    }
+  }, [currentTrack?.id]);
+
   const [showLyrics, setShowLyrics] = useState(false);
   const [lyrics, setLyrics] = useState<string>('');
   const [syncedLyrics, setSyncedLyrics] = useState<string | null>(null);
@@ -353,44 +378,57 @@ function AppContent() {
     setLyricsAlbum(null);
     setIsEditingLyrics(false);
     setEditedLyricsText('');
-    if (currentTrack) {
+    
+    if (!currentTrack) {
+      setIsLoadingLyrics(false);
+      return;
+    }
+
+    if (activeTabRef.current !== 'feed') {
       setIsExpanded(true);
-      
-      let active = true;
-      const timer = setTimeout(async () => {
-        setIsLoadingLyrics(true);
-        try {
-          const result = await youtubeService.getLyrics(currentTrack.title, currentTrack.artist);
-          if (active) {
-            if (result) {
-              setLyrics(result.lyrics || '');
-              setSyncedLyrics(result.syncedLyrics || null);
-              setPlainLyrics(result.plainLyrics || null);
-              setIsSynced(!!result.isSynced);
-              setLyricsAlbum(result.albumName || null);
-            }
-          }
-        } catch (e) {
-          if (active) {
-            setLyrics('No se encontraron letras disponibles.');
-            setSyncedLyrics(null);
-            setPlainLyrics('No se encontraron letras disponibles.');
-            setIsSynced(false);
-            setLyricsAlbum(null);
-          }
-        } finally {
-          if (active) {
-            setIsLoadingLyrics(false);
+    }
+    
+    let active = true;
+    const timer = setTimeout(async () => {
+      setIsLoadingLyrics(true);
+      try {
+        const result = await youtubeService.getLyrics(currentTrack.title, currentTrack.artist);
+        if (active) {
+          if (result) {
+            setLyrics(result.lyrics || '');
+            setSyncedLyrics(result.syncedLyrics || null);
+            setPlainLyrics(result.plainLyrics || null);
+            setIsSynced(!!result.isSynced);
+            setLyricsAlbum(result.albumName || null);
           }
         }
-      }, 1500); // 1.5s delay debounces fast skips entirely!
+      } catch (e) {
+        if (active) {
+          setLyrics('No se encontraron letras disponibles.');
+          setSyncedLyrics(null);
+          setPlainLyrics('No se encontraron letras disponibles.');
+          setIsSynced(false);
+          setLyricsAlbum(null);
+        }
+      } finally {
+        if (active) {
+          setIsLoadingLyrics(false);
+        }
+      }
+    }, 1500); // 1.5s delay debounces fast skips entirely!
 
-      return () => {
-        active = false;
-        clearTimeout(timer);
-      };
-    }
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [currentTrack?.id]);
+
+  // Collapse player automatically when switching to feed
+  React.useEffect(() => {
+    if (activeTab === 'feed') {
+      setIsExpanded(false);
+    }
+  }, [activeTab]);
 
   const formatTime = (seconds: number) => {
     if (!seconds || isNaN(seconds)) return '0:00';
@@ -404,13 +442,28 @@ function AppContent() {
   const handlePlayerError = async (code: number) => {
     console.error('Player error code:', code);
     
-    // Classic fallback to ensure robust playback if restricted
-    if ([101, 150].includes(code) && currentTrack) {
-      console.warn(`Track ${currentTrack.title} is restricted. Searching for alternative...`);
+    // Classic fallback to ensure robust playback if restricted/failed
+    if ([2, 5, 100, 101, 150].includes(code) && currentTrack) {
+      failedVideoIdsRef.current.add(currentTrack.id);
+      
+      if (consecutiveFallbackCountRef.current >= 2) {
+        console.warn('Exceeded maximum alternative attempts for failed/restricted songs. Loading next queue track.');
+        notify(language === 'es' ? 'Contenido restringido o no disponible. Avanzando...' : 'Content restricted or unavailable. Skipping...', 'info');
+        nextTrack();
+        return;
+      }
+
+      consecutiveFallbackCountRef.current += 1;
+      console.warn(`Track ${currentTrack.title} failed with code ${code} (Attempt ${consecutiveFallbackCountRef.current}). Searching for alternative...`);
+      
       try {
-        const results = await youtubeService.search(`${currentTrack.title} ${currentTrack.artist} topic`);
-        const alternative = results.find(t => t.id !== currentTrack.id);
+        const queryTerm = `${currentTrack.title} ${currentTrack.artist} topic`;
+        const results = await youtubeService.search(queryTerm);
+        // Find alternative video ID that hasn't failed yet
+        const alternative = results.find(t => t.id !== currentTrack.id && !failedVideoIdsRef.current.has(t.id));
         if (alternative) {
+           // Register this fallback in player context so standard syncing logic is aware!
+           registerFallback(currentTrack.id, alternative);
            playTrack(alternative, queue);
            return;
         }
@@ -418,7 +471,7 @@ function AppContent() {
         console.error('Fallback search failed:', e);
       }
       nextTrack();
-    } else if ([2, 5, 100].includes(code)) {
+    } else {
       setTimeout(() => nextTrack(), 1000); 
     }
   };
@@ -427,8 +480,14 @@ function AppContent() {
     switch (activeTab) {
       case 'home': return <HomeScreen />;
       case 'search': return <SearchScreen />;
+      case 'feed': return <TikTokFeedScreen />;
+      case 'social': return <SocialScreen />;
+      case 'live': return <LiveStreamScreen />;
+      case 'chat': return <ChatScreen />;
       case 'library': return <LibraryScreen />;
       case 'stats': return <StatsScreen />;
+      case 'editor': return <VideoEditorScreen onClose={() => setActiveTab('home')} />;
+      case 'rooms': return <MusicRoomsScreen onClose={() => setActiveTab('home')} />;
       default: return <HomeScreen />;
     }
   };
@@ -495,8 +554,237 @@ function AppContent() {
         )}
       </AnimatePresence>
 
+      {/* Optional Smartphone Simulator Bezel framing on Desktop */}
+      {useDeviceFrame ? (
+        <div className="hidden lg:flex flex-1 items-center justify-center p-6 bg-gradient-to-tr from-[#0a0a0f] via-[#040406] to-[#070c12] relative overflow-hidden select-none w-screen h-screen">
+          {/* Neon atmospheric glow */}
+          <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[140px] pointer-events-none animate-pulse" />
+          <div className="absolute bottom-1/3 right-1/4 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[160px] pointer-events-none animate-pulse" style={{ animationDelay: '2s' }} />
+
+          {/* Left info panel panel */}
+          <div className="max-w-md mr-16 z-20 space-y-6">
+            <span className="text-[10px] font-mono font-black text-primary uppercase tracking-[0.25em] bg-primary/10 border border-primary/20 px-3.5 py-1.5 rounded-full shadow-lg shadow-primary/5 inline-flex items-center gap-1.5">
+              <Sparkles size={11} className="animate-spin" /> {language === 'es' ? 'VIBESONIC NATIVO ANDROID' : 'VIBESONIC ANDROID PREVIEW'}
+            </span>
+            <div className="space-y-3">
+              <h1 className="text-5xl font-black bg-gradient-to-r from-primary via-[#00cbff] to-white bg-clip-text text-transparent tracking-tighter">
+                VIBESONIC
+              </h1>
+              <p className="text-gray-400 text-xs leading-relaxed font-semibold">
+                {language === 'es' 
+                  ? 'Hemos diseñado la aplicación con una arquitectura móvil adaptada a las pautas de Play Store. Disfruta de la experiencia real deslizando los feeds, activando rachas y simulando salas live en este dispositivo interactivo virtual.' 
+                  : 'We engineered the app as a true native-first client optimized for high perf Android devices. Swivel on the custom mock chassis to try the synced lyrics, voice-chat indicators, and streak triggers right now!'}
+              </p>
+            </div>
+
+            {/* Quick specifications badges */}
+            <div className="grid grid-cols-2 gap-3 pb-2 text-[10px] text-gray-500 font-mono font-bold uppercase">
+              <div className="bg-white/[0.02] border border-white/5 p-3 rounded-2xl flex items-center gap-2">
+                <Flame size={14} className="text-[#00df82]" />
+                <span>Rachas 🔥 Fuego</span>
+              </div>
+              <div className="bg-white/[0.02] border border-white/5 p-3 rounded-2xl flex items-center gap-2">
+                <Video size={14} className="text-pink-400" />
+                <span>Lives 🔴 Sim</span>
+              </div>
+              <div className="bg-white/[0.02] border border-white/5 p-3 rounded-2xl flex items-center gap-2">
+                <Sparkles size={14} className="text-yellow-400" />
+                <span>LRC ⚡ Synced</span>
+              </div>
+              <div className="bg-white/[0.02] border border-white/5 p-3 rounded-2xl flex items-center gap-2">
+                <MessageSquare size={14} className="text-cyan-400" />
+                <span>Inbox 💬 DMs</span>
+              </div>
+            </div>
+
+            <div className="flex gap-4 items-center pt-2">
+              <button 
+                onClick={() => setUseDeviceFrame(false)}
+                className="bg-white text-black text-[11px] font-black uppercase tracking-wider px-6 py-3.5 rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl shadow-white/5 cursor-pointer flex items-center gap-2"
+              >
+                <Smartphone size={14} />
+                <span>{language === 'es' ? 'Pantalla Completa' : 'Full Screen Width'}</span>
+              </button>
+
+              <button 
+                onClick={() => setLanguage(language === 'es' ? 'en' : 'es')}
+                className="bg-white/5 border border-white/10 text-white text-[11px] font-black uppercase tracking-wider px-5 py-3.5 rounded-2xl hover:bg-white/10 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <Languages size={14} />
+                <span>{language === 'es' ? 'English (ENG)' : 'Español (ESP)'}</span>
+              </button>
+            </div>
+            
+            <p className="text-[9px] text-gray-600 font-mono font-semibold">
+              PREVIEW SYSTEM v2.4 • DISPOSITIVO VIRTUAL MOCKUP
+            </p>
+          </div>
+
+          {/* Physical Phone Shell markup with virtual notch */}
+          <div className="relative w-[385px] h-[785px] rounded-[52px] bg-[#12141c] border-[7px] border-[#363a45] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] flex-shrink-0 z-20 outline outline-[3px] outline-black ring-1 ring-white/15 overflow-hidden flex flex-col">
+            
+            {/* Camera speaker bezel Notch cutout bar */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-8 bg-black rounded-b-2xl z-[110] flex items-center justify-center">
+              {/* Speaker pill */}
+              <div className="w-12 h-1 bg-[#1a1a1a] rounded-full absolute top-[6px]" />
+              {/* Camera circular lens */}
+              <div className="w-3 h-3 bg-[#080c10] border border-blue-900 rounded-full absolute right-6 top-[8px]" />
+            </div>
+
+            {/* Simulated Live Android OS StatusBar */}
+            <div className="absolute top-0 left-0 right-0 h-9 z-[100] px-6 text-white text-[10px] font-bold font-mono tracking-wide flex items-center justify-between bg-gradient-to-b from-black/40 to-transparent pointer-events-none">
+              <span className="text-[11px] pt-1.5 select-none text-white font-black">12:44</span>
+              <div className="flex items-center gap-1.5 pt-1.5 select-none text-white font-bold text-[9px]">
+                <span className="text-[7.5px] bg-[#00df82]/20 border border-[#00df82]/40 px-1 py-0.2 rounded text-[#00df82] uppercase font-black tracking-tight scale-90">5G LTE</span>
+                <span>📶</span>
+                <span>🔋 98%</span>
+              </div>
+            </div>
+
+            {/* Actual screen view inside the Bezel Frame */}
+            <div className="flex-1 w-full bg-black relative overflow-hidden flex flex-col">
+              {/* Nested Client App Content */}
+              <div className="h-full w-full flex flex-col relative overflow-hidden bg-black select-none text-white">
+                <div className="flex-1 overflow-hidden relative flex flex-col">
+                  
+                  {/* Notifications inside phone mock */}
+                  <AnimatePresence>
+                    {notification && (
+                      <motion.div 
+                        initial={{ y: -50, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: -50, opacity: 0 }}
+                        className="absolute top-11 left-4 right-4 z-[100] bg-primary text-black px-4 py-2.5 rounded-2xl font-black text-[10px] shadow-2xl flex items-center gap-2 border border-primary/20"
+                      >
+                        <Music2 size={13} className="text-black" />
+                        <span className="truncate flex-1 leading-tight">{notification.message}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Header bar within the phone mock */}
+                  <header className="p-4 pt-11 flex items-center justify-between z-20 absolute top-0 left-0 right-0 bg-transparent">
+                    <div className="flex items-center gap-2">
+                       {currentTrack?.thumbnail ? (
+                         <motion.div 
+                           animate={{ rotate: isPlaying ? 360 : 0 }}
+                           transition={{ repeat: Infinity, duration: 10, ease: 'linear' }}
+                           className="w-7 h-7 rounded-full overflow-hidden shadow-lg border border-primary/40 flex-shrink-0 cursor-pointer ring-2 ring-primary/25"
+                           onClick={() => setIsExpanded(true)}
+                         >
+                           <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                         </motion.div>
+                       ) : (
+                         <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
+                            <div className="w-3 h-3 rounded-full bg-primary shadow-lg shadow-primary/40 animate-pulse" />
+                         </div>
+                       )}
+                       <span onClick={() => currentTrack && setIsExpanded(true)} className="font-black text-xl bg-gradient-to-r from-primary via-[#00eae6] to-[#00abff] bg-clip-text text-transparent tracking-tighter cursor-pointer">VibeSonic</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => setLanguage(language === 'es' ? 'en' : 'es')}
+                        className="bg-black/40 border border-white/5 hover:bg-black/60 rounded-full px-2.5 py-1 text-[9px] font-black text-white focus:outline-none flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Languages size={10} />
+                        <span>{language === 'es' ? 'ESP' : 'ENG'}</span>
+                      </button>
+                    </div>
+                  </header>
+
+                  {/* Principal Screen Container inside phone */}
+                  <main className={`flex-1 overflow-y-auto overflow-x-hidden pt-[calc(3.5rem+env(safe-area-inset-top))] px-4 scrollbar-hide select-none bg-black ${currentTrack && activeTab !== 'feed' ? 'pb-36' : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]'}`}>
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={activeTab}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="h-full"
+                      >
+                        {renderScreen()}
+                      </motion.div>
+                    </AnimatePresence>
+                  </main>
+
+                  {/* Phone Mini Player inside frame */}
+                  {!isExpanded && currentTrack && activeTab !== 'feed' && (
+                    <div className="absolute bottom-[4.75rem] left-2.5 right-2.5 z-[90]">
+                      <AnimatePresence>
+                        <motion.div 
+                          initial={{ y: 20, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          className="bg-[#12141d]/95 backdrop-blur-3xl rounded-2xl p-2.5 flex items-center justify-between shadow-2xl border border-white/10 cursor-pointer"
+                          onClick={() => setIsExpanded(true)}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-9 h-9 rounded-lg overflow-hidden bg-primary/10 shadow-inner flex-shrink-0">
+                              <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-black truncate leading-tight text-white">{currentTrack.title}</p>
+                              <p className="text-[9px] text-[#00df82] truncate uppercase font-bold tracking-tight mt-0.5">{currentTrack.artist}</p>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-primary pr-1 ml-2 cursor-pointer hover:bg-white/5"
+                          >
+                            {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+                          </button>
+                        </motion.div>
+                      </AnimatePresence>
+                    </div>
+                  )}
+
+                  {/* Custom simulated Android Navigation bar inside phone */}
+                  <nav className="absolute bottom-0 left-0 right-0 h-20 bg-[#07080b]/95 backdrop-blur-3xl border-t border-white/5 flex items-center justify-around px-2 z-[90] shadow-3xl">
+                    <NavButton 
+                      active={activeTab === 'home'} 
+                      onClick={() => setActiveTab('home')} 
+                      icon={<Home size={18} />} 
+                      label={t('home')} 
+                    />
+                    <NavButton 
+                      active={activeTab === 'feed'} 
+                      onClick={() => setActiveTab('feed')} 
+                      icon={<PlayCircle size={18} />} 
+                      label="Feed" 
+                    />
+                    <NavButton 
+                      active={activeTab === 'social'} 
+                      onClick={() => setActiveTab('social')} 
+                      icon={<Heart size={18} />} 
+                      label="Social" 
+                    />
+                    <NavButton 
+                      active={activeTab === 'live'} 
+                      onClick={() => setActiveTab('live')} 
+                      icon={<Video size={18} />} 
+                      label="Live" 
+                    />
+                    <NavButton 
+                      active={['chat', 'stats', 'library'].includes(activeTab)} 
+                      onClick={() => setShowMoreMenu(true)} 
+                      icon={<Menu size={18} className="text-primary animate-pulse" />} 
+                      label="More" 
+                    />
+                  </nav>
+
+                </div>
+              </div>
+            </div>
+
+            {/* Hardware virtual Android home pill overlay */}
+            <div className="absolute bottom-1 bg-white/40 left-1/2 -translate-x-1/2 w-32 h-1 rounded-full z-[110]" />
+          </div>
+        </div>
+      ) : null}
+
       {/* Floating Aura Particles */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-10">
+      <div className={`fixed inset-0 pointer-events-none overflow-hidden z-10 ${useDeviceFrame ? 'lg:hidden' : ''}`}>
         {particles.map((p) => (
           <div
             key={p.id}
@@ -514,31 +802,58 @@ function AppContent() {
         ))}
       </div>
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-80 bg-surface m-2 rounded-xl border border-outline/30 overflow-hidden shadow-2xl flex-shrink-0">
-        <div className="pt-6 px-6 flex items-center gap-3">
-          <div className="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
-             <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-lg shadow-primary/40 animate-pulse" />
+      <aside className={`hidden md:flex flex-col w-80 bg-surface m-2 rounded-xl border border-outline/30 overflow-hidden shadow-2xl flex-shrink-0 ${useDeviceFrame ? 'lg:hidden' : ''}`}>
+        <div className="pt-6 px-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
+               <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-lg shadow-primary/40 animate-pulse" />
+            </div>
+            <span className="font-black text-2xl bg-gradient-to-r from-primary via-[#00eae6] to-[#00abff] bg-clip-text text-transparent tracking-tighter">VibeSonic</span>
           </div>
-          <span className="font-black text-2xl bg-gradient-to-r from-primary via-[#00eae6] to-[#00abff] bg-clip-text text-transparent tracking-tighter">VibeSonic</span>
+          <button 
+            onClick={() => setUseDeviceFrame(!useDeviceFrame)}
+            className={`p-2 rounded-lg border transition-all cursor-pointer hidden lg:block ${useDeviceFrame ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(3,221,130,0.2)]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}
+            title="Toggle Smartphone Mockup Frame"
+          >
+            <Smartphone size={16} />
+          </button>
         </div>
 
-        <nav className="p-6 space-y-4">
+        <nav className="p-6 space-y-2 overflow-y-auto max-h-[360px] scrollbar-hide border-b border-white/5">
           <SidebarNavButton 
             active={activeTab === 'home'} 
             onClick={() => setActiveTab('home')} 
-            icon={<Home size={28} />} 
+            icon={<Home size={22} />} 
             label={t('home')} 
           />
           <SidebarNavButton 
-            active={activeTab === 'search'} 
-            onClick={() => setActiveTab('search')} 
-            icon={<Search size={28} />} 
-            label={t('search')} 
+            active={activeTab === 'feed'} 
+            onClick={() => setActiveTab('feed')} 
+            icon={<PlayCircle size={22} />} 
+            label={language === 'es' ? 'Vibe Reels 🔥' : 'Vibe Feed 🔥'} 
+          />
+          <SidebarNavButton 
+            active={activeTab === 'social'} 
+            onClick={() => setActiveTab('social')} 
+            icon={<Heart size={22} />} 
+            label={language === 'es' ? 'Social (Historias) 📸' : 'Social (Stories) 📸'} 
+          />
+          <SidebarNavButton 
+            active={activeTab === 'live'} 
+            onClick={() => setActiveTab('live')} 
+            icon={<Video size={22} />} 
+            label={language === 'es' ? 'Transmisiones En Vivo 🔴' : 'Live Streams 🔴'} 
+          />
+          <SidebarNavButton 
+            active={activeTab === 'chat'} 
+            onClick={() => setActiveTab('chat')} 
+            icon={<MessageSquare size={22} />} 
+            label={language === 'es' ? 'Salas y Chats 💬' : 'Community Chats 💬'} 
           />
           <SidebarNavButton 
             active={activeTab === 'stats'} 
             onClick={() => setActiveTab('stats')} 
-            icon={<TrendingUp size={28} />} 
+            icon={<TrendingUp size={22} />} 
             label={language === 'es' ? 'Mi Vibra' : 'My Vibe'} 
           />
         </nav>
@@ -602,7 +917,7 @@ function AppContent() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-surface md:m-2 md:ml-0 rounded-xl border border-outline/30 overflow-hidden relative group/content shadow-2xl">
+      <div className={`flex-1 flex flex-col min-w-0 bg-surface md:m-2 md:ml-0 rounded-xl border border-outline/30 overflow-hidden relative group/content shadow-2xl ${useDeviceFrame ? 'lg:hidden' : ''}`}>
         {/* Dynamic Background Gradient */}
         {currentTrack && (
           <div 
@@ -692,7 +1007,7 @@ function AppContent() {
         </header>
 
         {/* Main Content */}
-        <main className={`flex-1 overflow-y-auto overflow-x-hidden pt-[calc(5.25rem+env(safe-area-inset-top))] px-4 md:px-6 scrollbar-hide transition-all ${currentTrack ? 'pb-[calc(11.5rem+env(safe-area-inset-bottom))]' : 'pb-[calc(6.5rem+env(safe-area-inset-bottom))]'}`}>
+        <main className={`flex-1 overflow-y-auto overflow-x-hidden pt-[calc(5.25rem+env(safe-area-inset-top))] px-4 md:px-6 scrollbar-hide transition-all ${currentTrack && activeTab !== 'feed' ? 'pb-[calc(11.5rem+env(safe-area-inset-bottom))]' : 'pb-[calc(6.5rem+env(safe-area-inset-bottom))]'}`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -707,7 +1022,7 @@ function AppContent() {
         </main>
 
         {/* Mini Player (Mobile Only) */}
-        {!isExpanded && currentTrack && (
+        {!isExpanded && currentTrack && activeTab !== 'feed' && (
           <div className="md:hidden">
             <AnimatePresence>
               <motion.div 
@@ -750,12 +1065,13 @@ function AppContent() {
         volume={volume} 
         onTrackEnd={nextTrack}
         onError={handlePlayerError}
+        isHidden={activeTab === 'feed'}
       />
     </div>
 
       {/* Desktop Bottom Player */}
       <AnimatePresence>
-        {currentTrack && (
+        {currentTrack && activeTab !== 'feed' && (
           <motion.div 
             initial={{ y: 100 }}
             animate={{ y: 0 }}
@@ -907,30 +1223,36 @@ function AppContent() {
   </AnimatePresence>
 
       {/* Bottom Nav (Mobile Only) */}
-      <nav className="md:hidden bg-surface/95 backdrop-blur-3xl border-t border-outline/30 h-[calc(5rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex items-center justify-around px-4 z-40 fixed bottom-0 left-0 right-0 shadow-[0_-10px_35px_rgba(0,0,0,0.8)]">
+      <nav className="md:hidden bg-surface/95 backdrop-blur-3xl border-t border-outline/30 h-[calc(5rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex items-center justify-around px-2 z-40 fixed bottom-0 left-0 right-0 shadow-[0_-10px_35px_rgba(0,0,0,0.8)]">
         <NavButton 
           active={activeTab === 'home'} 
           onClick={() => setActiveTab('home')} 
-          icon={<Home size={22} />} 
+          icon={<Home size={20} />} 
           label={t('home')} 
         />
         <NavButton 
-          active={activeTab === 'search'} 
-          onClick={() => setActiveTab('search')} 
-          icon={<Search size={22} />} 
-          label={t('search')} 
+          active={activeTab === 'feed'} 
+          onClick={() => setActiveTab('feed')} 
+          icon={<PlayCircle size={20} />} 
+          label="Feed" 
         />
         <NavButton 
-          active={activeTab === 'stats'} 
-          onClick={() => setActiveTab('stats')} 
-          icon={<TrendingUp size={22} />} 
-          label={language === 'es' ? 'Mi Vibra' : 'My Vibe'} 
+          active={activeTab === 'social'} 
+          onClick={() => setActiveTab('social')} 
+          icon={<Heart size={20} />} 
+          label="Social" 
         />
         <NavButton 
-          active={activeTab === 'library'} 
-          onClick={() => setActiveTab('library')} 
-          icon={<Library size={22} />} 
-          label={t('library')} 
+          active={activeTab === 'live'} 
+          onClick={() => setActiveTab('live')} 
+          icon={<Video size={20} />} 
+          label="Live" 
+        />
+        <NavButton 
+          active={['chat', 'stats', 'library'].includes(activeTab)} 
+          onClick={() => setShowMoreMenu(true)} 
+          icon={<Menu size={20} className="text-primary animate-pulse" />} 
+          label="More" 
         />
       </nav>
 
@@ -1276,6 +1598,159 @@ function AppContent() {
       
       {/* Auth Modal Component */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} />
+
+      {/* More Options Drawer Sheet (Mobile Only Drawer) */}
+      <AnimatePresence>
+        {showMoreMenu && (
+          <>
+            {/* Backdrop Blur overlay */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMoreMenu(false)}
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[110] pointer-events-auto"
+            />
+            
+            {/* Drawer Bezel */}
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="fixed bottom-0 left-0 right-0 max-h-[85%] bg-[#0d0f14] border-t border-white/10 rounded-t-[32px] overflow-hidden z-[120] flex flex-col p-6 space-y-6 pointer-events-auto shadow-3xl text-white pb-[calc(2.5rem+env(safe-area-inset-bottom))]"
+            >
+              <div className="w-12 h-1 bg-white/20 rounded-full mx-auto relative -top-2" />
+              
+              <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={16} className="text-primary animate-pulse" />
+                  <h4 className="text-xs font-black uppercase tracking-widest text-[#00df82]">
+                    {language === 'es' ? 'SISTEMA VIBESONIC MÁS' : 'VIBESONIC OPTIONS'}
+                  </h4>
+                </div>
+                <button 
+                  onClick={() => setShowMoreMenu(false)}
+                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Grid of sub tab links */}
+              <div className="space-y-4">
+                <span className="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-widest block leading-none">Navegar Secciones:</span>
+                <div className="grid grid-cols-2 xs:grid-cols-3 gap-3">
+                  <div 
+                    onClick={() => { setActiveTab('chat'); setShowMoreMenu(false); }}
+                    className={`p-3.5 rounded-2xl border text-center flex flex-col items-center gap-1.5 cursor-pointer transition-all ${
+                      activeTab === 'chat' ? 'bg-primary/10 border-primary text-primary' : 'bg-black/35 border-white/5 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <MessageSquare size={18} />
+                    <span className="text-[9.5px] font-black uppercase tracking-wider">Mensajes</span>
+                  </div>
+
+                  <div 
+                    onClick={() => { setActiveTab('stats'); setShowMoreMenu(false); }}
+                    className={`p-3.5 rounded-2xl border text-center flex flex-col items-center gap-1.5 cursor-pointer transition-all ${
+                      activeTab === 'stats' ? 'bg-primary/10 border-primary text-primary' : 'bg-black/35 border-white/5 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <TrendingUp size={18} />
+                    <span className="text-[9.5px] font-black uppercase tracking-wider">Mi Vibra</span>
+                  </div>
+
+                  <div 
+                    onClick={() => { setActiveTab('library'); setShowMoreMenu(false); }}
+                    className={`p-3.5 rounded-2xl border text-center flex flex-col items-center gap-1.5 cursor-pointer transition-all ${
+                      activeTab === 'library' ? 'bg-primary/10 border-primary text-primary' : 'bg-black/35 border-white/5 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <User size={18} />
+                    <span className="text-[9.5px] font-black uppercase tracking-wider">Mi Perfil</span>
+                  </div>
+
+                  <div 
+                    onClick={() => { setActiveTab('rooms'); setShowMoreMenu(false); }}
+                    className={`p-3.5 rounded-2xl border text-center flex flex-col items-center gap-1.5 cursor-pointer transition-all ${
+                      activeTab === 'rooms' ? 'bg-primary/10 border-primary text-primary' : 'bg-black/35 border-white/5 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <Radio size={18} className={activeTab === 'rooms' ? 'animate-pulse' : ''} />
+                    <span className="text-[9.5px] font-black uppercase tracking-wider">Salas Live</span>
+                  </div>
+
+                  <div 
+                    onClick={() => { setActiveTab('editor'); setShowMoreMenu(false); }}
+                    className={`p-3.5 rounded-2xl border text-center flex flex-col items-center gap-1.5 cursor-pointer transition-all ${
+                      activeTab === 'editor' ? 'bg-primary/10 border-primary text-primary' : 'bg-black/35 border-white/5 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <Film size={18} />
+                    <span className="text-[9.5px] font-black uppercase tracking-wider">Estudio FX</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Customize Section */}
+              <div className="space-y-4 pt-1">
+                <span className="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-widest block leading-none">Configurar Preferencias:</span>
+                
+                <div className="space-y-2.5">
+                  
+                  {/* Smartphone Frame Toggle on Desktop */}
+                  <div className="hidden lg:flex items-center justify-between bg-black/20 border border-white/5 p-3 rounded-2xl">
+                    <div className="flex items-center gap-2.5">
+                      <Smartphone size={15} className="text-cyan-400" />
+                      <div className="text-left">
+                        <p className="text-xs font-black text-white">Bezel Movil Virtual</p>
+                        <p className="text-[9.5px] text-gray-500 font-medium">Framing físico de celular Android</p>
+                      </div>
+                    </div>
+                    <input 
+                      type="checkbox"
+                      checked={useDeviceFrame}
+                      onChange={(e) => setUseDeviceFrame(e.target.checked)}
+                      className="w-4 h-4 accent-primary rounded cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Language switch */}
+                  <div className="flex items-center justify-between bg-black/20 border border-white/5 p-3 rounded-2xl">
+                    <div className="flex items-center gap-2.5">
+                      <Languages size={15} className="text-[#00df82]" />
+                      <div className="text-left">
+                        <p className="text-xs font-black text-white">{language === 'es' ? 'Idioma del Sistema' : 'System Language'}</p>
+                        <p className="text-[9.5px] text-gray-500 font-medium">{language === 'es' ? 'Cambia la localización regional' : 'Toggle system localization'}</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setLanguage(language === 'es' ? 'en' : 'es')}
+                      className="text-[10px] font-mono font-black uppercase text-primary border border-primary/20 bg-primary/10 px-3 py-1.5 rounded-xl hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    >
+                      {language === 'es' ? 'Español (ESP)' : 'English (ENG)'}
+                    </button>
+                  </div>
+
+                  {/* Aura picker options info shortcut */}
+                  <div className="bg-[#10141d]/80 border border-primary/10 p-4 rounded-2xl text-xs space-y-2 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full blur-xl pointer-events-none" />
+                    <span className="text-[8.5px] font-mono text-cyan-400 font-bold uppercase tracking-wider block">Holo Aura Customization:</span>
+                    <p className="text-[10px] text-gray-400 leading-relaxed font-sans">
+                      {language === 'es' 
+                        ? 'Puedes personalizar completamente el gradiente de aura neón cinético de fondo y los colores del visualizador en la pestaña "Mi Vibra" ✨.'
+                        : 'You can fully customize the neon aura gradients and wave player styles directly in the "My Vibe" stats panel ✨.'}
+                    </p>
+                  </div>
+
+                </div>
+              </div>
+
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

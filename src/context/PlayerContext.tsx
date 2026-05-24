@@ -91,6 +91,13 @@ interface PlayerContextType {
   language: 'es' | 'en';
   setLanguage: (lang: 'es' | 'en') => void;
   t: (key: string) => string;
+  fallbackMap: Record<string, YouTubeTrack>;
+  registerFallback: (originalId: string, fallbackTrack: YouTubeTrack) => void;
+  posts: any[];
+  stories: any[];
+  addPost: (text: string, image?: string, music?: { id: string; title: string; artist: string; thumbnail: string }) => void;
+  addStory: (image: string, music?: { id: string; title: string; artist: string; thumbnail: string }) => void;
+  likePostInContext: (postId: string) => void;
 }
 
 const translations = {
@@ -250,6 +257,148 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const saved = localStorage.getItem('pureaudio_lang');
     return (saved as 'es' | 'en') || 'es';
   });
+  
+  const [fallbackMap, setFallbackMap] = useState<Record<string, YouTubeTrack>>({});
+
+  const registerFallback = useCallback((originalId: string, fallbackTrack: YouTubeTrack) => {
+    setFallbackMap(prev => ({
+      ...prev,
+      [originalId]: fallbackTrack
+    }));
+  }, []);
+
+  // Real-life famous global music artists for standard posts/stories
+  const initialPosts = [
+    {
+      id: 'p1',
+      user: 'Coldplay',
+      avatar: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=150&q=80',
+      time: '15m ago',
+      text: '¡Increíble la vibra del concierto de anoche! Gracias a todos por brillar. 🌟💫',
+      music: {
+        id: 'yKNxeF4KAtY',
+        title: 'Yellow',
+        artist: 'Coldplay',
+        thumbnail: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=150&q=80'
+      },
+      likes: 1240,
+      comments: 180,
+      isLiked: false
+    },
+    {
+      id: 'p2',
+      user: 'Rosalía',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+      time: '2h ago',
+      text: 'Preparando algo gigante en el estudio... Motomami volvió 🏍️✨ Sintoniza DESPECHÁ para calentar motores!',
+      image: 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?auto=format&fit=crop&w=600&q=80',
+      music: {
+        id: 'y3mXyF9_B8a',
+        title: 'DESPECHÁ',
+        artist: 'Rosalía',
+        thumbnail: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?auto=format&fit=crop&w=150&q=80'
+      },
+      likes: 3420,
+      comments: 540,
+      isLiked: true
+    },
+    {
+      id: 'p3',
+      user: 'Billie Eilish',
+      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
+      time: '5h ago',
+      text: 'LUNCH is out now. hope you guys love playing it as much as i do. 🖤💫',
+      likes: 9812,
+      comments: 890,
+      isLiked: false
+    }
+  ];
+
+  const initialStories = [
+    { id: 's1', user: 'Billie Eilish', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80', hasStory: true, content: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=600&q=80', contentType: 'image', attachedSong: 'LUNCH', attachedArtist: 'Billie Eilish' },
+    { id: 's2', user: 'Bad Bunny', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80', hasStory: true, content: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=600&q=80', contentType: 'image', attachedSong: 'MONACO', attachedArtist: 'Bad Bunny' },
+    { id: 's3', user: 'Rosalía', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80', hasStory: true, content: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=600&q=80', contentType: 'image', attachedSong: 'DESPECHÁ', attachedArtist: 'Rosalía' },
+    { id: 's4', user: 'Coldplay', avatar: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=150&q=80', hasStory: true, content: 'https://images.unsplash.com/photo-1513829096999-4978602294fc?auto=format&fit=crop&w=600&q=80', contentType: 'image', attachedSong: 'Yellow', attachedArtist: 'Coldplay' }
+  ];
+
+  const [posts, setPosts] = useState<any[]>(() => {
+    const saved = localStorage.getItem('pureaudio_posts_v2');
+    return saved ? JSON.parse(saved) : initialPosts;
+  });
+
+  const [stories, setStories] = useState<any[]>(() => {
+    const saved = localStorage.getItem('pureaudio_stories_v2');
+    return saved ? JSON.parse(saved) : initialStories;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pureaudio_posts_v2', JSON.stringify(posts));
+  }, [posts]);
+
+  useEffect(() => {
+    localStorage.setItem('pureaudio_stories_v2', JSON.stringify(stories));
+  }, [stories]);
+
+  const notify = useCallback((message: string, type: 'success' | 'info' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  }, []);
+
+  const addPost = useCallback((text: string, image?: string, music?: { id: string; title: string; artist: string; thumbnail: string }) => {
+    const userDisplayName = user?.displayName || 'Tú 🎧';
+    const userPhotoURL = user?.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
+    
+    const newPost = {
+      id: 'post_' + Date.now().toString(),
+      user: userDisplayName,
+      avatar: userPhotoURL,
+      time: 'Just now',
+      text,
+      image,
+      music,
+      likes: 0,
+      comments: 0,
+      isLiked: false
+    };
+    setPosts(prev => [newPost, ...prev]);
+    notify(language === 'es' ? '¡Publicación enviada con éxito!' : 'Content shared successfully!', 'success');
+  }, [user, language, notify]);
+
+  const addStory = useCallback((image: string, music?: { id: string; title: string; artist: string; thumbnail: string }) => {
+    const userDisplayName = user?.displayName || 'Tú 🎧';
+    const userPhotoURL = user?.photoURL || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80';
+    
+    const newStory = {
+      id: 'story_' + Date.now().toString(),
+      user: userDisplayName,
+      avatar: userPhotoURL,
+      hasStory: true,
+      content: image || 'https://images.unsplash.com/photo-1513829096999-4978602294fc?auto=format&fit=crop&w=600&q=80',
+      contentType: 'image',
+      attachedSong: music?.title,
+      attachedArtist: music?.artist
+    };
+
+    setStories(prev => {
+      // Keep it unique for player profile
+      const filtered = prev.filter(s => s.user !== userDisplayName);
+      return [newStory, ...filtered];
+    });
+    notify(language === 'es' ? '¡Historia publicada con éxito!' : 'Story created and updated!', 'success');
+  }, [user, language, notify]);
+
+  const likePostInContext = useCallback((postId: string) => {
+    setPosts(prev => prev.map(p => {
+      if (p.id === postId) {
+        return {
+          ...p,
+          isLiked: !p.isLiked,
+          likes: p.isLiked ? p.likes - 1 : p.likes + 1
+        };
+      }
+      return p;
+    }));
+  }, []);
 
   const t = useCallback((key: string) => {
     return (translations[language] as any)[key] || key;
@@ -258,11 +407,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem('pureaudio_lang', language);
   }, [language]);
-
-  const notify = useCallback((message: string, type: 'success' | 'info' = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
-  }, []);
 
   const setProgress = useCallback((current: number, total: number) => {
     setCurrentTime(current);
@@ -375,19 +519,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const playTrack = useCallback((track: YouTubeTrack, playlist?: YouTubeTrack[]) => {
-    console.log('Playing track:', track.title, track.id);
-    setCurrentTrack(track);
+    // Resolve fallback if exists
+    const resolvedTrack = fallbackMap[track.id] || track;
+    console.log('Playing track:', resolvedTrack.title, resolvedTrack.id);
+    setCurrentTrack(resolvedTrack);
     setIsPlaying(true);
     setCurrentTime(0);
     setSeekTarget(null);
     if (playlist) {
       setQueue(playlist);
-    } else if (likedTracks.some(t => t.id === track.id)) {
+    } else if (likedTracks.some(t => t.id === resolvedTrack.id)) {
       setQueue(likedTracks);
     } else {
-      setQueue([track]);
+      setQueue([resolvedTrack]);
     }
-  }, [likedTracks]);
+  }, [likedTracks, fallbackMap]);
 
   const nextTrack = useCallback(() => {
     if (!currentTrack || queue.length === 0) return;
@@ -670,7 +816,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       notify,
       language,
       setLanguage,
-      t
+      t,
+      fallbackMap,
+      registerFallback,
+      posts,
+      stories,
+      addPost,
+      addStory,
+      likePostInContext
     }}>
       {children}
     </PlayerContext.Provider>

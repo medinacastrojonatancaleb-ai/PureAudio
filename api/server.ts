@@ -22,6 +22,42 @@ function setCache(key: string, data: any) {
   cache.set(key, { data, timestamp: Date.now() });
 }
 
+function isPlaylistOrCompilation(title: string, duration?: string, seconds?: number): boolean {
+  const lowerTitle = title.toLowerCase();
+  
+  const playlistKeywords = [
+    "mix", "playlist", "compilación", "compilacion", "compilation", 
+    "completo", "full album", "album completo", "álbum completo", 
+    "1 hora", "1 hour", "2 horas", "2 hours", "3 horas", "3 hours", 
+    "lofi room", "colección", "coleccion", "sus mejores exitos", "sus mejores éxitos",
+    "grandes exitos", "grandes éxitos", "discografía", "discografia", "best songs",
+    "top tracks", "all songs", "completa", "exitos", "éxitos", "lofi mix", "chill mix",
+    "disco completo", "lofi playlist", "canciones completas", "álbumes", "albumes"
+  ];
+  
+  if (playlistKeywords.some(keyword => lowerTitle.includes(keyword))) {
+    return true;
+  }
+  
+  if (seconds && seconds > 600) {
+    return true;
+  }
+
+  if (duration) {
+    const colonCount = (duration.match(/:/g) || []).length;
+    if (colonCount >= 2) return true;
+    if (colonCount === 1) {
+      const parts = duration.split(':');
+      const minutes = parseInt(parts[0], 10);
+      if (!isNaN(minutes) && minutes >= 10) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
 export async function createServer() {
   const app = express();
 
@@ -639,10 +675,22 @@ export async function createServer() {
 
   app.get("/api/lyrics", async (req, res) => {
     const { title, artist } = req.query;
-    if (!title) return res.status(400).json({ error: "Title is required" });
+    
+    const titleStr = title ? String(title).trim() : "";
+    const artistStr = artist ? String(artist).trim() : "";
 
-    const titleStr = String(title);
-    const artistStr = artist ? String(artist) : "";
+    const emptyResult = {
+      lyrics: "No se encontraron letras disponibles.",
+      syncedLyrics: null,
+      plainLyrics: "No se encontraron letras disponibles.",
+      albumName: null,
+      duration: null,
+      isSynced: false
+    };
+
+    if (!titleStr || titleStr === "undefined" || titleStr === "null") {
+      return res.json(emptyResult);
+    }
 
     const lyricsDb = readLyricsDb();
     const cachedEntry = lookupLyricsEntry(lyricsDb, titleStr, artistStr);
@@ -773,14 +821,17 @@ export async function createServer() {
         console.warn(`[Server] No results for search: ${q}. Activating fallback.`);
         return res.json(getThematicFallback(q));
       }
-      const videos = results.videos.slice(0, 20).map(video => ({
-        id: video.videoId,
-        title: video.title,
-        artist: video.author.name,
-        thumbnail: video.image,
-        duration: video.timestamp,
-        views: video.views
-      }));
+      const videos = results.videos
+        .filter(video => !isPlaylistOrCompilation(video.title, video.timestamp, video.seconds))
+        .slice(0, 20)
+        .map(video => ({
+          id: video.videoId,
+          title: video.title,
+          artist: video.author.name,
+          thumbnail: video.image,
+          duration: video.timestamp,
+          views: video.views
+        }));
       setCache(cacheKey, videos);
       res.json(videos);
     } catch (error) {
@@ -804,13 +855,16 @@ export async function createServer() {
         console.warn("[Server] ytSearch returned no results, using fallbacks");
         return res.json(getThematicFallback("default"));
       }
-      const videos = results.videos.slice(0, 20).map(video => ({
-        id: video.videoId,
-        title: video.title,
-        artist: video.author.name,
-        thumbnail: video.image,
-        duration: video.timestamp
-      }));
+      const videos = results.videos
+        .filter(video => !isPlaylistOrCompilation(video.title, video.timestamp, video.seconds))
+        .slice(0, 20)
+        .map(video => ({
+          id: video.videoId,
+          title: video.title,
+          artist: video.author.name,
+          thumbnail: video.image,
+          duration: video.timestamp
+        }));
       setCache(cacheKey, videos);
       res.json(videos);
     } catch (error) {
@@ -862,7 +916,8 @@ export async function createServer() {
                                lowerTitle.includes("cover by") ||
                                lowerTitle.includes("parody") ||
                                lowerTitle.includes("fan made") ||
-                               lowerTitle.includes("full album");
+                               lowerTitle.includes("full album") ||
+                               isPlaylistOrCompilation(video.title, video.timestamp, video.seconds);
 
           const isCorrectArtist = nameInAuthor || isFuzzyArtist || (isOfficialSource && nameInTitle);
           

@@ -95,6 +95,9 @@ export const youtubeService = {
   },
 
   async getLyrics(title: string, artist: string): Promise<any> {
+    if (!title || !title.trim()) {
+      return { lyrics: 'No se encontraron letras disponibles.', isSynced: false };
+    }
     try {
       const response = await fetch(`/api/lyrics?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`);
       if (!response.ok) throw new Error('Lyrics failed');
