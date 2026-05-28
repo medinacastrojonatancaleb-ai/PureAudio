@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
-  Home, Search, Library, PlayCircle, PauseCircle, Music2, Heart, History, User,
-  ChevronDown, MoreHorizontal, SkipBack, SkipForward, Play, Pause, Volume2, Share2,
+  Home, Search, Library, PlayCircle, PauseCircle, Music2, Heart, History, User, PlusSquare,
+  ChevronDown, ChevronLeft, MoreHorizontal, SkipBack, SkipForward, Play, Pause, Volume2, Share2,
   Shuffle, Repeat, Repeat1, ListMusic, Volume1, VolumeX, UserPlus, UserCheck, TrendingUp,
   Video, MessageSquare, Menu, Smartphone, X, Flame, ShieldAlert, Cpu, Sparkles, Languages,
   Radio, Film
@@ -17,7 +17,10 @@ import TikTokFeedScreen from './screens/TikTokFeedScreen';
 import SocialScreen from './screens/SocialScreen';
 import LiveStreamScreen from './screens/LiveStreamScreen';
 import ChatScreen from './screens/ChatScreen';
+import CreatePostScreen from './screens/CreatePostScreen';
+import ProfileScreen from './screens/ProfileScreen';
 import { usePlayer } from './context/PlayerContext';
+import { useAppStore } from './store/useAppStore';
 import YouTubePlayer from './components/YouTubePlayer';
 import { youtubeService } from './services/youtubeService';
 import AuthModal from './components/AuthModal';
@@ -106,17 +109,40 @@ function AppContent() {
     t,
     isAuthModalOpen,
     setAuthModalOpen,
-    registerFallback
+    registerFallback,
+    stopTrack,
+    posts
   } = usePlayer();
 
-  const [activeTab, setActiveTab] = useState('home');
+  const { setSoundtrackToUse } = useAppStore();
+
+  const [activeTab, setActiveTab] = useState('feed');
   const activeTabRef = React.useRef(activeTab);
+  
+  // Stop playback when leaving feed tab
+  const prevTabRef = React.useRef(activeTab);
   React.useEffect(() => {
+    if (prevTabRef.current === 'feed' && activeTab !== 'feed') {
+      stopTrack();
+    }
+    if (activeTab === 'create' || activeTab === 'editor') {
+      stopTrack();
+    }
+    prevTabRef.current = activeTab;
     activeTabRef.current = activeTab;
-  }, [activeTab]);
+  }, [activeTab, stopTrack]);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [useDeviceFrame, setUseDeviceFrame] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
+  
+  const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
+  React.useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(typeof window !== 'undefined' && window.innerWidth >= 640);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // Track failed videos and safe consecutive fallbacks to prevent infinite loops
   const failedVideoIdsRef = React.useRef<Set<string>>(new Set());
@@ -139,8 +165,72 @@ function AppContent() {
   const [editedLyricsText, setEditedLyricsText] = useState('');
   const [isIntroActive, setIsIntroActive] = useState(true);
   const [activeAura, setActiveAura] = useState('cyber');
+  const [lyricsSubTab, setLyricsSubTab] = useState<'letra' | 'feed'>('letra');
+  const [lyricsSearchQuery, setLyricsSearchQuery] = useState('');
 
   const parsedLines = React.useMemo(() => parseLrc(syncedLyrics || ''), [syncedLyrics]);
+
+  const songRelatedPosts = React.useMemo(() => {
+    if (!currentTrack) return [];
+    
+    // Filter posts from context matching current song title or track artist
+    const matched = (posts || []).filter(post => {
+      if (!post.music) return false;
+      const songTitle = post.music.title?.toLowerCase() || '';
+      const currentTitle = currentTrack.title?.toLowerCase() || '';
+      return songTitle.includes(currentTitle) || currentTitle.includes(songTitle);
+    });
+
+    const filterQuery = lyricsSearchQuery.toLowerCase().trim();
+
+    // Default premium preset loops/posts generated specifically for this track
+    const presets = [
+      {
+        id: 'related_1',
+        user: '@VaporNeonLoop',
+        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
+        time: 'Justo ahora',
+        text: `✨ El mejor loop de ${currentTrack.title} de ${currentTrack.artist} en 9:16 sincronizado con letras dinámicas y luces neón! #pureaudio #loop`,
+        videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-neon-light-on-a-wet-street-at-night-42233-large.mp4',
+        likes: 312,
+        comments: 14,
+        isLiked: false
+      },
+      {
+        id: 'related_2',
+        user: '@AtmosphereArtist',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+        time: 'Hace 3h',
+        text: `🔮 Me quedé atrapado en esta parte de ${currentTrack.title}. ¿Ya vieron los nuevos subtítulos estroboscópicos? #perfectbloop #viral`,
+        image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
+        likes: 540,
+        comments: 32,
+        isLiked: true
+      },
+      {
+        id: 'related_3',
+        user: '@CyberPunkVibe',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
+        time: 'Ayer',
+        text: `🎸 Remezclando la producción de ${currentTrack.artist}. Sintonía perfecta con tus audífonos PureAudio encendidos! 🎧⚡`,
+        videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-laser-lights-at-a-music-concert-42111-large.mp4',
+        likes: 985,
+        comments: 73,
+        isLiked: false
+      }
+    ];
+
+    const combined = [...matched, ...presets];
+
+    if (filterQuery) {
+      return combined.filter(post => 
+        post.text?.toLowerCase().includes(filterQuery) || 
+        post.user?.toLowerCase().includes(filterQuery)
+      );
+    }
+
+    return combined;
+  }, [posts, currentTrack, lyricsSearchQuery]);
 
   const activeLineIndex = React.useMemo(() => {
     if (parsedLines.length === 0) return -1;
@@ -370,7 +460,6 @@ function AppContent() {
 
   // Reset lyrics view when track changes, auto-expand player, & start background analysis of lyrics instantly with a 1.5s debounce to save API quota!
   React.useEffect(() => {
-    setShowLyrics(false);
     setLyrics('');
     setSyncedLyrics(null);
     setPlainLyrics(null);
@@ -442,6 +531,12 @@ function AppContent() {
   const handlePlayerError = async (code: number) => {
     console.error('Player error code:', code);
     
+    // Skip fallback searching for local user-uploaded videos
+    if ((currentTrack as any)?.isUserUploaded) {
+      console.log('User-uploaded video track, bypassing YouTube error fallback');
+      return;
+    }
+    
     // Classic fallback to ensure robust playback if restricted/failed
     if ([2, 5, 100, 101, 150].includes(code) && currentTrack) {
       failedVideoIdsRef.current.add(currentTrack.id);
@@ -480,12 +575,14 @@ function AppContent() {
     switch (activeTab) {
       case 'home': return <HomeScreen />;
       case 'search': return <SearchScreen />;
-      case 'feed': return <TikTokFeedScreen />;
+      case 'feed': return <TikTokFeedScreen setActiveTab={setActiveTab} />;
+      case 'create': return <CreatePostScreen onNavigateBack={() => setActiveTab('feed')} />;
       case 'social': return <SocialScreen />;
       case 'live': return <LiveStreamScreen />;
       case 'chat': return <ChatScreen />;
-      case 'library': return <LibraryScreen />;
       case 'stats': return <StatsScreen />;
+      case 'library': return <LibraryScreen />;
+      case 'profile': return <ProfileScreen />;
       case 'editor': return <VideoEditorScreen onClose={() => setActiveTab('home')} />;
       case 'rooms': return <MusicRoomsScreen onClose={() => setActiveTab('home')} />;
       default: return <HomeScreen />;
@@ -556,13 +653,13 @@ function AppContent() {
 
       {/* Optional Smartphone Simulator Bezel framing on Desktop */}
       {useDeviceFrame ? (
-        <div className="hidden lg:flex flex-1 items-center justify-center p-6 bg-gradient-to-tr from-[#0a0a0f] via-[#040406] to-[#070c12] relative overflow-hidden select-none w-screen h-screen">
+        <div className="hidden sm:flex flex-1 items-center justify-center p-6 bg-gradient-to-tr from-[#0a0a0f] via-[#040406] to-[#070c12] relative overflow-hidden select-none w-screen h-screen">
           {/* Neon atmospheric glow */}
           <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[140px] pointer-events-none animate-pulse" />
           <div className="absolute bottom-1/3 right-1/4 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[160px] pointer-events-none animate-pulse" style={{ animationDelay: '2s' }} />
 
           {/* Left info panel panel */}
-          <div className="max-w-md mr-16 z-20 space-y-6">
+          <div className="hidden lg:block max-w-sm mr-12 z-20 space-y-6">
             <span className="text-[10px] font-mono font-black text-primary uppercase tracking-[0.25em] bg-primary/10 border border-primary/20 px-3.5 py-1.5 rounded-full shadow-lg shadow-primary/5 inline-flex items-center gap-1.5">
               <Sparkles size={11} className="animate-spin" /> {language === 'es' ? 'VIBESONIC NATIVO ANDROID' : 'VIBESONIC ANDROID PREVIEW'}
             </span>
@@ -663,38 +760,44 @@ function AppContent() {
                   </AnimatePresence>
 
                   {/* Header bar within the phone mock */}
-                  <header className="p-4 pt-11 flex items-center justify-between z-20 absolute top-0 left-0 right-0 bg-transparent">
-                    <div className="flex items-center gap-2">
-                       {currentTrack?.thumbnail ? (
-                         <motion.div 
-                           animate={{ rotate: isPlaying ? 360 : 0 }}
-                           transition={{ repeat: Infinity, duration: 10, ease: 'linear' }}
-                           className="w-7 h-7 rounded-full overflow-hidden shadow-lg border border-primary/40 flex-shrink-0 cursor-pointer ring-2 ring-primary/25"
-                           onClick={() => setIsExpanded(true)}
-                         >
-                           <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                         </motion.div>
-                       ) : (
-                         <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
-                            <div className="w-3 h-3 rounded-full bg-primary shadow-lg shadow-primary/40 animate-pulse" />
-                         </div>
-                       )}
-                       <span onClick={() => currentTrack && setIsExpanded(true)} className="font-black text-xl bg-gradient-to-r from-primary via-[#00eae6] to-[#00abff] bg-clip-text text-transparent tracking-tighter cursor-pointer">VibeSonic</span>
-                    </div>
+                  {activeTab !== 'feed' && activeTab !== 'create' && activeTab !== 'editor' && (
+                    <header className="p-4 pt-11 flex items-center justify-between z-20 absolute top-0 left-0 right-0 bg-transparent">
+                      <div className="flex items-center gap-2">
+                         {currentTrack?.thumbnail ? (
+                           <motion.div 
+                             animate={{ rotate: isPlaying ? 360 : 0 }}
+                             transition={{ repeat: Infinity, duration: 10, ease: 'linear' }}
+                             className="w-7 h-7 rounded-full overflow-hidden shadow-lg border border-primary/40 flex-shrink-0 cursor-pointer ring-2 ring-primary/25"
+                             onClick={() => setIsExpanded(true)}
+                           >
+                             <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                           </motion.div>
+                         ) : (
+                           <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
+                              <div className="w-3 h-3 rounded-full bg-primary shadow-lg shadow-primary/40 animate-pulse" />
+                           </div>
+                         )}
+                         <span onClick={() => currentTrack && setIsExpanded(true)} className="font-black text-xl bg-gradient-to-r from-primary via-[#00eae6] to-[#00abff] bg-clip-text text-transparent tracking-tighter cursor-pointer">VibeSonic</span>
+                      </div>
 
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => setLanguage(language === 'es' ? 'en' : 'es')}
-                        className="bg-black/40 border border-white/5 hover:bg-black/60 rounded-full px-2.5 py-1 text-[9px] font-black text-white focus:outline-none flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Languages size={10} />
-                        <span>{language === 'es' ? 'ESP' : 'ENG'}</span>
-                      </button>
-                    </div>
-                  </header>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => setLanguage(language === 'es' ? 'en' : 'es')}
+                          className="bg-black/40 border border-white/5 hover:bg-black/60 rounded-full px-2.5 py-1 text-[9px] font-black text-white focus:outline-none flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Languages size={10} />
+                          <span>{language === 'es' ? 'ESP' : 'ENG'}</span>
+                        </button>
+                      </div>
+                    </header>
+                  )}
 
                   {/* Principal Screen Container inside phone */}
-                  <main className={`flex-1 overflow-y-auto overflow-x-hidden pt-[calc(3.5rem+env(safe-area-inset-top))] px-4 scrollbar-hide select-none bg-black ${currentTrack && activeTab !== 'feed' ? 'pb-36' : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]'}`}>
+                  <main className={`flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide select-none bg-black ${
+                    activeTab === 'feed'
+                      ? 'p-0 w-full h-full pt-0 absolute inset-0'
+                      : `pt-[calc(3.5rem+env(safe-area-inset-top))] px-4 ${currentTrack ? 'pb-36' : 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]'}`
+                  }`}>
                     <AnimatePresence mode="wait">
                       <motion.div
                         key={activeTab}
@@ -704,13 +807,13 @@ function AppContent() {
                         transition={{ duration: 0.15 }}
                         className="h-full"
                       >
-                        {renderScreen()}
+                        {useDeviceFrame && isDesktop ? renderScreen() : null}
                       </motion.div>
                     </AnimatePresence>
                   </main>
 
                   {/* Phone Mini Player inside frame */}
-                  {!isExpanded && currentTrack && activeTab !== 'feed' && (
+                  {!isExpanded && currentTrack && activeTab !== 'feed' && activeTab !== 'create' && activeTab !== 'editor' && (
                     <div className="absolute bottom-[4.75rem] left-2.5 right-2.5 z-[90]">
                       <AnimatePresence>
                         <motion.div 
@@ -740,7 +843,11 @@ function AppContent() {
                   )}
 
                   {/* Custom simulated Android Navigation bar inside phone */}
-                  <nav className="absolute bottom-0 left-0 right-0 h-20 bg-[#07080b]/95 backdrop-blur-3xl border-t border-white/5 flex items-center justify-around px-2 z-[90] shadow-3xl">
+                  <nav className={`absolute bottom-0 left-0 right-0 h-14 flex items-center justify-around px-2 z-[90] shadow-3xl transition-all duration-300 ${
+                    activeTab === 'feed'
+                      ? 'bg-black/35 backdrop-blur-lg border-t border-white/10'
+                      : 'bg-[#07080b]/95 backdrop-blur-3xl border-t border-white/5'
+                  }`}>
                     <NavButton 
                       active={activeTab === 'home'} 
                       onClick={() => setActiveTab('home')} 
@@ -784,7 +891,7 @@ function AppContent() {
       ) : null}
 
       {/* Floating Aura Particles */}
-      <div className={`fixed inset-0 pointer-events-none overflow-hidden z-10 ${useDeviceFrame ? 'lg:hidden' : ''}`}>
+      <div className={`fixed inset-0 pointer-events-none overflow-hidden z-10 ${useDeviceFrame ? 'sm:hidden' : ''}`}>
         {particles.map((p) => (
           <div
             key={p.id}
@@ -802,7 +909,7 @@ function AppContent() {
         ))}
       </div>
       {/* Desktop Sidebar */}
-      <aside className={`hidden md:flex flex-col w-80 bg-surface m-2 rounded-xl border border-outline/30 overflow-hidden shadow-2xl flex-shrink-0 ${useDeviceFrame ? 'lg:hidden' : ''}`}>
+      <aside className={`hidden md:flex flex-col w-80 bg-surface m-2 rounded-xl border border-outline/30 overflow-hidden shadow-2xl flex-shrink-0 ${useDeviceFrame ? 'sm:hidden' : ''}`}>
         <div className="pt-6 px-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
@@ -812,49 +919,67 @@ function AppContent() {
           </div>
           <button 
             onClick={() => setUseDeviceFrame(!useDeviceFrame)}
-            className={`p-2 rounded-lg border transition-all cursor-pointer hidden lg:block ${useDeviceFrame ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(3,221,130,0.2)]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}
+            className={`p-2 rounded-lg border transition-all cursor-pointer hidden sm:block ${useDeviceFrame ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(3,221,130,0.2)]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}
             title="Toggle Smartphone Mockup Frame"
           >
             <Smartphone size={16} />
           </button>
         </div>
 
-        <nav className="p-6 space-y-2 overflow-y-auto max-h-[360px] scrollbar-hide border-b border-white/5">
+        <nav className="p-4 space-y-1 overflow-y-auto max-h-[360px] scrollbar-hide border-b border-white/5">
           <SidebarNavButton 
             active={activeTab === 'home'} 
             onClick={() => setActiveTab('home')} 
-            icon={<Home size={22} />} 
-            label={t('home')} 
+            icon={<Home size={19} />} 
+            label={language === 'es' ? 'Inicio 🎵' : 'Home 🎵'} 
+          />
+          <SidebarNavButton 
+            active={activeTab === 'search'} 
+            onClick={() => setActiveTab('search')} 
+            icon={<Search size={19} />} 
+            label={language === 'es' ? 'Buscar 🔍' : 'Search 🔍'} 
           />
           <SidebarNavButton 
             active={activeTab === 'feed'} 
             onClick={() => setActiveTab('feed')} 
-            icon={<PlayCircle size={22} />} 
+            icon={<PlayCircle size={19} />} 
             label={language === 'es' ? 'Vibe Reels 🔥' : 'Vibe Feed 🔥'} 
+          />
+          <SidebarNavButton 
+            active={activeTab === 'create'} 
+            onClick={() => setActiveTab('create')} 
+            icon={<PlusSquare size={19} className="text-primary animate-pulse" />} 
+            label={language === 'es' ? 'Crear 🚀' : 'Create 🚀'} 
           />
           <SidebarNavButton 
             active={activeTab === 'social'} 
             onClick={() => setActiveTab('social')} 
-            icon={<Heart size={22} />} 
-            label={language === 'es' ? 'Social (Historias) 📸' : 'Social (Stories) 📸'} 
-          />
-          <SidebarNavButton 
-            active={activeTab === 'live'} 
-            onClick={() => setActiveTab('live')} 
-            icon={<Video size={22} />} 
-            label={language === 'es' ? 'Transmisiones En Vivo 🔴' : 'Live Streams 🔴'} 
+            icon={<Heart size={19} />} 
+            label={language === 'es' ? 'Social 📸' : 'Social 📸'} 
           />
           <SidebarNavButton 
             active={activeTab === 'chat'} 
             onClick={() => setActiveTab('chat')} 
-            icon={<MessageSquare size={22} />} 
-            label={language === 'es' ? 'Salas y Chats 💬' : 'Community Chats 💬'} 
+            icon={<MessageSquare size={19} />} 
+            label={language === 'es' ? 'Chats 💬' : 'Chats 💬'} 
           />
           <SidebarNavButton 
             active={activeTab === 'stats'} 
             onClick={() => setActiveTab('stats')} 
-            icon={<TrendingUp size={22} />} 
-            label={language === 'es' ? 'Mi Vibra' : 'My Vibe'} 
+            icon={<TrendingUp size={19} />} 
+            label={language === 'es' ? 'Mi Vibra 📈' : 'My Vibe 📈'} 
+          />
+          <SidebarNavButton 
+            active={activeTab === 'library'} 
+            onClick={() => setActiveTab('library')} 
+            icon={<Library size={19} />} 
+            label={language === 'es' ? 'Biblioteca 📚' : 'Library 📚'} 
+          />
+          <SidebarNavButton 
+            active={activeTab === 'profile'} 
+            onClick={() => setActiveTab('profile')} 
+            icon={<User size={19} />} 
+            label={language === 'es' ? 'Perfil 👤' : 'Profile 👤'} 
           />
         </nav>
 
@@ -917,7 +1042,7 @@ function AppContent() {
       </aside>
 
       {/* Main Content Area */}
-      <div className={`flex-1 flex flex-col min-w-0 bg-surface md:m-2 md:ml-0 rounded-xl border border-outline/30 overflow-hidden relative group/content shadow-2xl ${useDeviceFrame ? 'lg:hidden' : ''}`}>
+      <div className={`flex-1 flex flex-col min-w-0 bg-surface md:m-2 md:ml-0 rounded-xl border border-outline/30 overflow-hidden relative group/content shadow-2xl ${useDeviceFrame ? 'sm:hidden' : ''}`}>
         {/* Dynamic Background Gradient */}
         {currentTrack && (
           <div 
@@ -943,71 +1068,77 @@ function AppContent() {
           )}
         </AnimatePresence>
 
-        <header className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] flex items-center justify-between z-20 absolute top-0 left-0 right-0 bg-gradient-to-b from-background/80 to-transparent">
-          <div className="flex items-center gap-2.5 md:hidden">
-             {currentTrack?.thumbnail ? (
-               <motion.div 
-                 animate={{ rotate: isPlaying ? 360 : 0 }}
-                 transition={{ repeat: Infinity, duration: 10, ease: 'linear' }}
-                 className="w-7 h-7 rounded-full overflow-hidden shadow-lg border border-primary/40 flex-shrink-0 cursor-pointer ring-2 ring-primary/25"
-                 onClick={() => setIsExpanded(true)}
-               >
-                 <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-               </motion.div>
-             ) : (
-               <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
-                  <div className="w-3 h-3 rounded-full bg-primary shadow-lg shadow-primary/40 animate-pulse" />
+        {activeTab !== 'feed' && activeTab !== 'create' && activeTab !== 'editor' && (
+          <header className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] flex items-center justify-between z-20 absolute top-0 left-0 right-0 bg-gradient-to-b from-background/80 to-transparent">
+            <div className="flex items-center gap-2.5 md:hidden">
+               {currentTrack?.thumbnail ? (
+                 <motion.div 
+                   animate={{ rotate: isPlaying ? 360 : 0 }}
+                   transition={{ repeat: Infinity, duration: 10, ease: 'linear' }}
+                   className="w-7 h-7 rounded-full overflow-hidden shadow-lg border border-primary/40 flex-shrink-0 cursor-pointer ring-2 ring-primary/25"
+                   onClick={() => setIsExpanded(true)}
+                 >
+                   <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                 </motion.div>
+               ) : (
+                 <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
+                    <div className="w-3 h-3 rounded-full bg-primary shadow-lg shadow-primary/40 animate-pulse" />
+                 </div>
+               )}
+               <span onClick={() => currentTrack && setIsExpanded(true)} className="font-black text-xl bg-gradient-to-r from-primary via-[#00eae6] to-[#00abff] bg-clip-text text-transparent tracking-tighter cursor-pointer">VibeSonic</span>
+               
+  
+            </div>
+  
+            <div className="flex items-center gap-3 ml-auto">
+               <div className="hidden sm:flex items-center bg-black/20 rounded-full p-1 ring-1 ring-white/10 mr-2">
+                  <button 
+                    onClick={() => setLanguage('es')}
+                    className={`px-3 py-1 rounded-full text-[10px] font-black transition-all ${language === 'es' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    ESP
+                  </button>
+                  <button 
+                    onClick={() => setLanguage('en')}
+                    className={`px-3 py-1 rounded-full text-[10px] font-black transition-all ${language === 'en' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    ENG
+                  </button>
                </div>
-             )}
-             <span onClick={() => currentTrack && setIsExpanded(true)} className="font-black text-xl bg-gradient-to-r from-primary via-[#00eae6] to-[#00abff] bg-clip-text text-transparent tracking-tighter cursor-pointer">VibeSonic</span>
-             
-
-          </div>
-
-          <div className="flex items-center gap-3 ml-auto">
-             <div className="hidden sm:flex items-center bg-black/20 rounded-full p-1 ring-1 ring-white/10 mr-2">
+               {!user ? (
                 <button 
-                  onClick={() => setLanguage('es')}
-                  className={`px-3 py-1 rounded-full text-[10px] font-black transition-all ${language === 'es' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}
+                  onClick={() => setAuthModalOpen(true)}
+                  className="bg-white text-black text-sm font-black px-6 py-2 rounded-full hover:scale-105 active:scale-95 transition-all shadow-lg"
                 >
-                  ESP
+                  {t('log_in')}
                 </button>
+              ) : (
                 <button 
-                  onClick={() => setLanguage('en')}
-                  className={`px-3 py-1 rounded-full text-[10px] font-black transition-all ${language === 'en' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}
+                  onClick={logout}
+                  className="flex items-center gap-2 bg-black/40 hover:bg-black/60 transition-colors rounded-full p-1 pr-3 border border-white/10"
                 >
-                  ENG
+                  <div className="w-7 h-7 rounded-full bg-[#333333] flex items-center justify-center overflow-hidden">
+                    {user.photoURL ? (
+                      <img src={user.photoURL} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={16} />
+                    )}
+                  </div>
+                  <span className="text-xs font-bold text-white truncate max-w-[100px]">
+                    {user.displayName || 'User'}
+                  </span>
                 </button>
-             </div>
-             {!user ? (
-              <button 
-                onClick={() => setAuthModalOpen(true)}
-                className="bg-white text-black text-sm font-black px-6 py-2 rounded-full hover:scale-105 active:scale-95 transition-all shadow-lg"
-              >
-                {t('log_in')}
-              </button>
-            ) : (
-              <button 
-                onClick={logout}
-                className="flex items-center gap-2 bg-black/40 hover:bg-black/60 transition-colors rounded-full p-1 pr-3 border border-white/10"
-              >
-                <div className="w-7 h-7 rounded-full bg-[#333333] flex items-center justify-center overflow-hidden">
-                  {user.photoURL ? (
-                    <img src={user.photoURL} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <User size={16} />
-                  )}
-                </div>
-                <span className="text-xs font-bold text-white truncate max-w-[100px]">
-                  {user.displayName || 'User'}
-                </span>
-              </button>
-            )}
-          </div>
-        </header>
+              )}
+            </div>
+          </header>
+        )}
 
         {/* Main Content */}
-        <main className={`flex-1 overflow-y-auto overflow-x-hidden pt-[calc(5.25rem+env(safe-area-inset-top))] px-4 md:px-6 scrollbar-hide transition-all ${currentTrack && activeTab !== 'feed' ? 'pb-[calc(11.5rem+env(safe-area-inset-bottom))]' : 'pb-[calc(6.5rem+env(safe-area-inset-bottom))]'}`}>
+        <main className={`flex-1 transition-all ${
+          activeTab === 'feed'
+            ? 'p-0 w-full h-full pt-0 absolute inset-0 overflow-hidden z-20'
+            : `overflow-y-auto overflow-x-hidden pt-[calc(5.25rem+env(safe-area-inset-top))] px-4 md:px-6 scrollbar-hide ${currentTrack ? 'pb-[calc(11.5rem+env(safe-area-inset-bottom))]' : 'pb-[calc(6.5rem+env(safe-area-inset-bottom))]'}`
+        }`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -1016,13 +1147,13 @@ function AppContent() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
-              {renderScreen()}
+              {!useDeviceFrame || !isDesktop ? renderScreen() : null}
             </motion.div>
           </AnimatePresence>
         </main>
 
         {/* Mini Player (Mobile Only) */}
-        {!isExpanded && currentTrack && activeTab !== 'feed' && (
+        {!isExpanded && currentTrack && activeTab !== 'feed' && activeTab !== 'create' && activeTab !== 'editor' && (
           <div className="md:hidden">
             <AnimatePresence>
               <motion.div 
@@ -1071,7 +1202,7 @@ function AppContent() {
 
       {/* Desktop Bottom Player */}
       <AnimatePresence>
-        {currentTrack && activeTab !== 'feed' && (
+        {currentTrack && activeTab !== 'feed' && activeTab !== 'create' && activeTab !== 'editor' && (
           <motion.div 
             initial={{ y: 100 }}
             animate={{ y: 0 }}
@@ -1223,36 +1354,42 @@ function AppContent() {
   </AnimatePresence>
 
       {/* Bottom Nav (Mobile Only) */}
-      <nav className="md:hidden bg-surface/95 backdrop-blur-3xl border-t border-outline/30 h-[calc(5rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex items-center justify-around px-2 z-40 fixed bottom-0 left-0 right-0 shadow-[0_-10px_35px_rgba(0,0,0,0.8)]">
+      <nav className="md:hidden bg-surface/95 backdrop-blur-3xl border-t border-outline/30 h-[calc(3.5rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex items-center justify-around px-1 z-40 fixed bottom-0 left-0 right-0 shadow-[0_-10px_35px_rgba(0,0,0,0.8)]">
         <NavButton 
           active={activeTab === 'home'} 
           onClick={() => setActiveTab('home')} 
-          icon={<Home size={20} />} 
-          label={t('home')} 
+          icon={<Home size={18} />} 
+          label={language === 'es' ? 'Inicio' : 'Home'} 
         />
         <NavButton 
           active={activeTab === 'feed'} 
           onClick={() => setActiveTab('feed')} 
-          icon={<PlayCircle size={20} />} 
+          icon={<PlayCircle size={18} />} 
           label="Feed" 
         />
         <NavButton 
-          active={activeTab === 'social'} 
-          onClick={() => setActiveTab('social')} 
-          icon={<Heart size={20} />} 
-          label="Social" 
+          active={activeTab === 'create'} 
+          onClick={() => setActiveTab('create')} 
+          icon={<PlusSquare size={18} className="text-primary animate-pulse" />} 
+          label={language === 'es' ? 'Crear' : 'Create'} 
         />
         <NavButton 
-          active={activeTab === 'live'} 
-          onClick={() => setActiveTab('live')} 
-          icon={<Video size={20} />} 
-          label="Live" 
+          active={activeTab === 'search'} 
+          onClick={() => setActiveTab('search')} 
+          icon={<Search size={18} />} 
+          label={language === 'es' ? 'Buscar' : 'Search'} 
         />
         <NavButton 
-          active={['chat', 'stats', 'library'].includes(activeTab)} 
+          active={activeTab === 'chat'} 
+          onClick={() => setActiveTab('chat')} 
+          icon={<MessageSquare size={18} />} 
+          label="Chats" 
+        />
+        <NavButton 
+          active={['social', 'stats', 'library', 'profile'].includes(activeTab)} 
           onClick={() => setShowMoreMenu(true)} 
-          icon={<Menu size={20} className="text-primary animate-pulse" />} 
-          label="More" 
+          icon={<Menu size={18} className="text-primary" />} 
+          label={language === 'es' ? 'Más' : 'More'} 
         />
       </nav>
 
@@ -1286,311 +1423,415 @@ function AppContent() {
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/35 to-black pointer-events-none" />
             </div>
              <div className="relative z-10 flex flex-col h-[100dvh] justify-between p-4 xs:p-5 md:py-6 md:px-12 lg:p-12 max-w-7xl mx-auto w-full overflow-hidden select-none pt-[calc(1.25rem+env(safe-area-inset-top))] pb-[calc(1.75rem+env(safe-area-inset-bottom))]">
-              <header className="flex justify-between items-center mb-2 xs:mb-4 md:mb-6 lg:mb-12 flex-shrink-0">
-                <button 
-                  onClick={() => setIsExpanded(false)}
-                  className="w-10 h-10 xs:w-12 xs:h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-                >
-                  <ChevronDown size={24} />
-                </button>
-                <div className="text-center">
-                  <p className="text-[9px] uppercase tracking-[0.2em] text-gray-400 font-bold mb-0.5">Playing from</p>
-                  <p className="font-bold text-xs xs:text-sm">{t('now_playing')}</p>
-                </div>
-                <button className="w-10 h-10 xs:w-12 xs:h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
-                  <MoreHorizontal size={20} />
-                </button>
-              </header>
-              <div className="flex-1 flex flex-col md:flex-row items-center justify-between md:justify-center gap-4 sm:gap-8 md:gap-12 lg:gap-24 overflow-hidden py-3 xs:py-5 sm:py-6 w-full">
-                {/* Album Art Section or Lyrics */}
-                <AnimatePresence mode="wait">
-                  {!showLyrics ? (
-                    <motion.div 
-                      key="album-art"
-                      layoutId="player-art"
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.9, opacity: 0 }}
-                      className="w-auto h-[25vh] min-h-[140px] max-h-[240px] xs:h-[28vh] xs:max-h-[295px] md:w-full md:h-auto md:max-w-[330px] lg:max-w-[400px] xl:max-w-[420px] aspect-square flex-shrink-0 relative group flex items-center justify-center mx-auto"
-                    >
-                      <RotatingVinyl isPlaying={isPlaying} thumbnail={currentTrack.thumbnail} />
-                    </motion.div>
-                  ) : (
-                    <motion.div 
-                      key="lyrics"
-                      initial={{ scale: 0.95, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.95, opacity: 0 }}
-                      className="w-full max-w-2xl flex-1 h-0 overflow-y-auto scrollbar-hide py-3 md:py-6 px-3 md:px-8 flex flex-col items-center"
-                    >
+              {showLyrics ? (
+                /* ----------------- LYRICS MODE (MATCHES SCREENSHOT) ----------------- */
+                <>
+                  <header className="flex flex-col gap-3 justify-between items-center mb-3 sm:mb-4 flex-shrink-0 w-full animate-fadeIn select-none">
+                    <div className="flex items-center justify-between w-full">
+                      <button 
+                        onClick={() => setShowLyrics(false)}
+                        className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors flex-shrink-0"
+                      >
+                        <ChevronLeft size={22} className="text-white" />
+                      </button>
+                      
+                      {/* Premium Top Center Badge */}
+                      <div className="flex items-center gap-3 relative bg-black/45 backdrop-blur-md border border-white/10 px-4 py-1.5 rounded-2xl shadow-xl max-w-[70%] sm:max-w-md">
+                        <img 
+                          src={currentTrack.thumbnail} 
+                          className="w-8 h-8 rounded-lg border border-white/10 object-cover flex-shrink-0" 
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="text-left min-w-0">
+                          <h3 className="font-extrabold text-white text-[11px] sm:text-xs truncate leading-tight">{currentTrack.title}</h3>
+                          <p className="text-primary text-[9.5px] truncate font-bold mt-0.5 leading-none">{currentTrack.artist}</p>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            setEditedLyricsText(lyrics || '');
+                            setIsEditingLyrics(true);
+                          }}
+                          className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-gray-450 hover:text-white flex-shrink-0 ml-1"
+                          title={language === 'es' ? 'Editar letras' : 'Edit lyrics'}
+                        >
+                          <MoreHorizontal size={13} />
+                        </button>
+                      </div>
+
+                      <div className="w-10 h-10 flex-shrink-0" /> {/* Symmetry Spacer */}
+                    </div>
+
+                    {/* Capsule Search Bar */}
+                    <div className="w-full max-w-lg flex items-center justify-between bg-[#1f2024]/40 backdrop-blur-3xl border border-white/10 rounded-full px-5 py-2.0 hover:border-white/20 transition-all">
+                      <input 
+                        type="text"
+                        placeholder={language === 'es' ? 'Buscar contenido relacionado' : 'Search related content'}
+                        value={lyricsSearchQuery}
+                        onChange={(e) => setLyricsSearchQuery(e.target.value)}
+                        className="bg-transparent border-none text-[12px] text-white placeholder:text-gray-400 focus:outline-none focus:ring-0 w-full font-sans font-medium pr-2"
+                      />
+                      <div className="flex items-center gap-2">
+                        {lyricsSearchQuery && (
+                          <button 
+                            onClick={() => setLyricsSearchQuery('')} 
+                            className="text-[10px] text-gray-400 hover:text-white uppercase font-sans font-bold leading-none"
+                          >
+                            {language === 'es' ? 'Limpiar' : 'Clear'}
+                          </button>
+                        )}
+                        <div className="h-4.5 w-px bg-white/10" />
+                        <Search size={15} className="text-[#a0a3bd] cursor-pointer hover:text-white transition-colors" />
+                      </div>
+                    </div>
+                  </header>
+
+                  {/* PORTADA ARRIBA: Safe Visual Cover Section */}
+                  <div className="flex-shrink-0 flex items-center justify-center gap-4 py-2 w-full animate-fadeIn">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl relative overflow-hidden shadow-2xl border border-white/15 flex-shrink-0">
+                      <img 
+                        src={currentTrack.thumbnail} 
+                        className="w-full h-full object-cover" 
+                        referrerPolicy="no-referrer"
+                      />
+                      {isPlaying && (
+                        <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#00df82] animate-ping" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-left min-w-0 max-w-[220px]">
+                      <span className="text-[9px] font-mono font-black text-[#00df82] tracking-widest uppercase flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#00df82] animate-pulse" />
+                        {language === 'es' ? 'EN REPRODUCCIÓN' : 'NOW PLAYING'}
+                      </span>
+                      <div className="font-extrabold text-white text-sm sm:text-base truncate mt-0.5 leading-tight">{currentTrack.title}</div>
+                      <div className="text-gray-400 text-xs truncate font-medium leading-none mt-1">{currentTrack.artist}</div>
+                    </div>
+                  </div>
+
+                  {/* RECUADRO GIGANTE DE LYRICS EN EL CENTRO (Dedicado Cinema Box con Glassmorphism) */}
+                  <div className="flex-1 w-full max-w-2xl mx-auto min-h-0 relative select-none overflow-hidden my-3 md:my-5 rounded-[32px] border border-white/10 shadow-[0_25px_60px_rgba(0,0,0,0.7)]">
+                    
+                    {/* Glassmorphic frosted layer inside */}
+                    <div className="absolute inset-0 z-0 bg-black/40 backdrop-blur-3xl" />
+                    
+                    {/* Atmospheric Dynamic Highlight Radial inside the recuadro */}
+                    <div className="absolute inset-x-0 -top-16 h-48 bg-gradient-to-b from-[#00df82]/10 to-transparent blur-3xl rounded-full z-[1] pointer-events-none" />
+                    
+                    <div className="relative z-10 w-full h-full flex flex-col justify-center">
                       {isLoadingLyrics ? (
-                        <div className="flex flex-col items-center gap-4 mt-20">
-                          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(0,223,130,0.3)]" />
-                           <p className="text-primary font-bold uppercase tracking-widest text-xs animate-pulse">{t('summoning_lyrics')}</p>
+                        <div className="flex flex-col items-center gap-4 py-20 m-auto">
+                          <div className="w-11 h-11 border-4 border-[#00df82] border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(0,223,130,0.3)]" />
+                          <p className="text-[#00df82] font-bold uppercase tracking-widest text-[10px] animate-pulse">{t('summoning_lyrics')}</p>
+                        </div>
+                      ) : isEditingLyrics ? (
+                        /* Editing form perfectly fit inside limits */
+                        <div className="w-full h-full p-6 flex flex-col space-y-4 max-h-full overflow-y-auto m-auto">
+                          <h3 className="text-xs font-mono font-black uppercase text-[#00df82] tracking-widest text-center">
+                            {language === 'es' ? '✏️ Corregir Letra' : '✏️ Correct Lyrics'}
+                          </h3>
+                          <textarea
+                            value={editedLyricsText}
+                            onChange={(e) => setEditedLyricsText(e.target.value)}
+                            className="w-full flex-1 bg-black/45 border border-white/10 rounded-2xl p-4 text-sm text-white focus:outline-none focus:border-emerald-400 font-sans resize-none font-medium text-center min-h-[120px]"
+                            placeholder={language === 'es' ? "Escribe o pega la letra de la canción aquí..." : "Type or paste the song lyrics here..."}
+                          />
+                          <div className="flex gap-2 justify-center pt-1 flex-shrink-0">
+                            <button
+                              onClick={() => setIsEditingLyrics(false)}
+                              className="px-5 py-2 rounded-full border border-white/10 text-[10px] font-black uppercase tracking-wider hover:bg-white/5 text-gray-400 hover:text-white transition-all active:scale-95 cursor-pointer"
+                            >
+                              {language === 'es' ? 'Cancelar' : 'Cancel'}
+                            </button>
+                            <button
+                              onClick={handleSaveLyrics}
+                              className="px-6 py-2 rounded-full bg-[#00df82] text-black text-[10px] font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-lg"
+                            >
+                              {language === 'es' ? 'Guardar' : 'Save'}
+                            </button>
+                          </div>
                         </div>
                       ) : (
-                        <div className="w-full bg-black/40 backdrop-blur-3xl border border-white/10 rounded-2xl p-4 md:p-8 shadow-3xl flex flex-col items-center space-y-4 max-h-[60vh] overflow-hidden relative">
-                          {isEditingLyrics ? (
-                            <div className="w-full flex flex-col space-y-4">
-                              <h3 className="text-sm font-mono font-black uppercase text-primary tracking-widest text-center">
-                                {language === 'es' ? 'Corregir Letra' : 'Correct Lyrics'}
-                              </h3>
-                              <p className="text-xs text-gray-400 text-center leading-relaxed">
-                                {language === 'es' 
-                                  ? 'Si la letra de la canción está incompleta, desincronizada o tiene errores, puedes corregirla aquí abajo para que se guarde de inmediato.'
-                                  : 'If the lyrics are incorrect or incomplete, edit or paste them here and save.'}
-                              </p>
-                              <textarea
-                                value={editedLyricsText}
-                                onChange={(e) => setEditedLyricsText(e.target.value)}
-                                className="w-full h-80 bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white/90 focus:outline-none focus:border-primary/50 font-mono resize-none focus:ring-1 focus:ring-primary/20"
-                                placeholder={language === 'es' ? "Escribe o pega la letra de la canción aquí..." : "Type or paste the song lyrics here..."}
-                              />
-                              <div className="flex gap-3 justify-center pt-2">
-                                <button
-                                  onClick={() => setIsEditingLyrics(false)}
-                                  className="px-5 py-2 rounded-full border border-white/10 text-xs font-black uppercase tracking-wider hover:bg-white/5 text-gray-400 hover:text-white transition-all active:scale-95"
+                        /* GIGANTE, ELEGANTE, CENTRADO SCROLLING DEDICATED LYRICS BOX */
+                        <div 
+                          ref={lyricsContainerRef}
+                          className="w-full h-full overflow-y-auto scrollbar-hide py-36 px-6 flex flex-col space-y-12 relative select-none scroll-smooth pointer-events-auto"
+                          style={{
+                            maskImage: 'linear-gradient(to bottom, transparent 0%, white 30%, white 70%, transparent 100%)',
+                            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, white 30%, white 70%, transparent 100%)'
+                          }}
+                        >
+                          {isSynced && parsedLines.length > 0 ? (
+                            parsedLines.map((line, idx) => {
+                              const isActive = idx === activeLineIndex;
+                              return (
+                                <div
+                                  key={idx}
+                                  data-lyric-idx={idx}
+                                  onClick={() => seekTo(line.time)}
+                                  style={isActive ? {
+                                    color: '#ffffff',
+                                    textShadow: '0 0 35px rgba(255, 255, 255, 0.95), 0 0 15px rgba(0, 223, 130, 0.25)'
+                                  } : undefined}
+                                  className={`w-full text-center cursor-pointer py-1 px-1.5 transition-all duration-[400ms] transform origin-center select-none ${
+                                    isActive
+                                      ? 'text-[32px] xs:text-[40px] sm:text-[48px] md:text-[56px] font-black opacity-100 scale-102 leading-normal tracking-tight'
+                                      : 'text-white/20 text-lg xs:text-2xl sm:text-3xl font-extrabold opacity-30 hover:text-white/60 scale-95 leading-normal filter blur-[0.4px] hover:blur-0'
+                                  }`}
                                 >
-                                  {language === 'es' ? 'Cancelar' : 'Cancel'}
-                                </button>
-                                <button
-                                  onClick={handleSaveLyrics}
-                                  className="px-6 py-2 rounded-full bg-primary text-black text-xs font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20"
-                                >
-                                  {language === 'es' ? 'Guardar Cambios' : 'Save Changes'}
-                                </button>
-                              </div>
-                            </div>
+                                  {line.text}
+                                </div>
+                              );
+                            })
                           ) : (
-                            <>
-                              {isSynced && parsedLines.length > 0 ? (
-                                <div 
-                                  ref={lyricsContainerRef}
-                                  className="w-full overflow-y-auto scrollbar-hide py-10 px-2 flex flex-col space-y-6 max-h-[40vh] relative select-none"
-                                  style={{
-                                    maskImage: 'linear-gradient(to bottom, transparent 0%, white 15%, white 85%, transparent 100%)',
-                                    WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, white 15%, white 85%, transparent 100%)'
-                                  }}
-                                >
-                                  {parsedLines.map((line, idx) => {
-                                    const isActive = idx === activeLineIndex;
-                                    const isPast = idx < activeLineIndex;
-                                    const auraGlowColor = auraColors[activeAura]?.border || '#00df82';
-                                    
-                                    return (
-                                      <div
-                                        key={idx}
-                                        data-lyric-idx={idx}
-                                        onClick={() => seekTo(line.time)}
-                                        style={isActive ? {
-                                          color: auraGlowColor,
-                                          textShadow: `0 0 20px ${auraGlowColor}80`
-                                        } : undefined}
-                                        className={`w-full text-center cursor-pointer py-2 px-3 rounded-lg transition-all duration-300 transform origin-center ${
-                                          isActive
-                                            ? 'text-lg md:text-2xl font-black opacity-100 scale-105'
-                                            : isPast
-                                              ? 'text-white/40 text-md md:text-xl font-bold opacity-60 hover:text-white/80 scale-95'
-                                              : 'text-white/20 text-sm md:text-lg font-bold opacity-35 hover:text-white/60 scale-90'
-                                        }`}
-                                      >
-                                        {line.text}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              ) : (
-                                <div className="w-full space-y-4 text-center select-text overflow-y-auto scrollbar-hide max-h-[40vh] py-4 px-2">
-                                  {(lyrics || t('no_lyrics')).split('\n').map((line, index) => {
-                                    const trimmed = line.trim();
-                                    if (!trimmed) {
-                                      return <div key={index} className="h-4" />;
-                                    }
-                                    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-                                      return (
-                                        <span 
-                                          key={index} 
-                                          className="block text-[10px] md:text-xs font-mono font-black uppercase tracking-[0.25em] text-primary/85 pt-3 pb-1"
-                                        >
-                                          {trimmed}
-                                        </span>
-                                      );
-                                    }
-                                    return (
-                                      <motion.p 
-                                        key={index}
-                                        initial={{ opacity: 0, y: 15 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: Math.min(index * 0.01, 0.3) }}
-                                        className="text-md md:text-lg font-bold text-white/90 leading-relaxed tracking-tight hover:text-primary transition-colors cursor-default drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]"
-                                      >
-                                        {trimmed}
-                                      </motion.p>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                              
-                              <div className="w-full border-t border-white/5 pt-4 text-center flex flex-col items-center">
-                                <span className="text-[8px] font-mono font-black uppercase tracking-[0.2em] text-[#00df82] px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
-                                  {isSynced ? 'LRCLIB Sync Master' : 'PureAudio Plain Mode'}
-                                </span>
-                                
-                                {lyricsAlbum && (
-                                  <p className="text-[10px] text-gray-400 mt-2 font-mono uppercase tracking-widest max-w-full truncate">
-                                    📀 {language === 'es' ? 'Álbum' : 'Album'}: {lyricsAlbum}
-                                  </p>
-                                )}
-
-                                <div className="flex gap-2 justify-center mt-2.5">
-                                  <button
-                                    onClick={() => {
-                                      setEditedLyricsText(lyrics || '');
-                                      setIsEditingLyrics(true);
-                                    }}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-[9px] font-black uppercase tracking-[0.08em] text-white/70 hover:text-white transition-all border border-white/10 shadow-md"
+                            <div className="w-full text-center space-y-8 py-10 px-2">
+                              {(lyrics || t('no_lyrics')).split('\n').map((line, index) => {
+                                const trimmed = line.trim();
+                                if (!trimmed) {
+                                  return <div key={index} className="h-6" />;
+                                }
+                                return (
+                                  <p 
+                                    key={index}
+                                    className="text-2xl xs:text-3xl sm:text-4xl md:text-[42px] font-black text-white/50 hover:text-[#00df82] transition-colors cursor-default tracking-tight leading-normal"
                                   >
-                                    ✏️ {language === 'es' ? 'Corregir Letra' : 'Correct Lyrics'}
-                                  </button>
-                                </div>
-                                <p className="text-[9px] text-gray-500 italic mt-2">{t('lyrics_by')}</p>
-                              </div>
-                            </>
+                                    {trimmed}
+                                  </p>
+                                );
+                              })}
+                            </div>
                           )}
                         </div>
                       )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-   
-                {/* Control Center Section */}
-                <div className="w-full max-w-[450px] flex flex-col justify-between flex-grow flex-1 md:justify-center md:gap-6 lg:gap-8 overflow-hidden md:overflow-visible py-2 xs:py-4">
-                  <div className="space-y-1 text-center md:text-left select-none flex-shrink-0">
-                    <motion.h1 
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      className="text-lg xs:text-2xl md:text-4xl lg:text-5xl font-black tracking-tight line-clamp-1 md:line-clamp-2"
-                    >
-                      {currentTrack.title}
-                    </motion.h1>
-                    <div className="flex flex-col items-center md:items-start select-none">
-                      <motion.p 
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.1 }}
-                        className="text-xs xs:text-sm md:text-xl text-primary font-bold truncate max-w-full"
-                      >
-                        {currentTrack.artist}
-                      </motion.p>
-                      <button 
-                        onClick={() => toggleFollowArtist({
-                          id: '',
-                          name: currentTrack.artist,
-                          thumbnail: currentTrack.thumbnail
-                        })}
-                        className={`mt-1 flex items-center gap-1.5 px-3 py-1 rounded-full border text-[9px] xs:text-[10px] font-bold transition-all ${
-                          followedArtists.some(a => a.name === currentTrack.artist)
-                            ? 'bg-primary border-primary text-black' 
-                            : 'bg-transparent border-white/20 text-white hover:border-white'
-                        }`}
-                      >
-                        {followedArtists.some(a => a.name === currentTrack.artist) ? (
-                          <><UserCheck size={11} /> {t('following')}</>
-                        ) : (
-                          <><UserPlus size={11} /> {t('follow_artist')}</>
-                        )}
-                      </button>
                     </div>
                   </div>
- 
-                  {/* Waveform Visualizer */}
-                  <div className="w-full h-8 xs:h-11 md:h-12 bg-surface/30 border border-outline/20 rounded-2xl p-1 xs:p-2 backdrop-blur-md flex items-center justify-center relative overflow-hidden flex-shrink-0">
-                    <WaveformVisualizer isPlaying={isPlaying} color="#00df82" height={26} />
-                  </div>
-   
-                  {/* Progress Section */}
-                  <div className="w-full space-y-1.5 flex-shrink-0">
-                    <div className="relative group/progress h-2 flex items-center">
-                      <input 
-                        type="range"
-                        min="0"
-                        max={duration || 100}
-                        step="1"
-                        value={currentTime || 0}
-                        onChange={(e) => seekTo(parseFloat(e.target.value))}
-                        className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
-                      />
-                      <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+
+                  {/* CONTROLES ABAJO: Beautiful safe controls block under the lyrics recuadro */}
+                  <div className="w-full bg-[#16171a]/55 backdrop-blur-3xl border border-white/5 rounded-[28px] p-4.5 flex flex-col space-y-3 px-5 max-w-2xl mx-auto flex-shrink-0 select-none animate-fadeIn z-20 shadow-2xl">
+                    <div className="w-full space-y-2">
+                      <div className="relative group/progress h-3 flex items-center">
+                        <input 
+                          type="range"
+                          min="0"
+                          max={duration || 100}
+                          step="1"
+                          value={currentTime || 0}
+                          onChange={(e) => seekTo(parseFloat(e.target.value))}
+                          className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
+                        />
+                        <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-white group-hover/progress:bg-primary transition-colors duration-200" 
+                            style={{ width: `${progress}%` }} 
+                          />
+                        </div>
                         <div 
-                          className="h-full bg-white group-hover/progress:bg-primary transition-colors" 
-                          style={{ width: `${progress}%` }} 
+                          className="absolute w-3.5 h-3.5 bg-white rounded-full opacity-0 group-hover/progress:opacity-100 shadow-xl transition-opacity pointer-events-none"
+                          style={{ left: `calc(${progress}% - 7px)` }}
                         />
                       </div>
-                      <div 
-                        className="absolute w-3 h-3 bg-white rounded-full opacity-0 group-hover/progress:opacity-100 shadow-xl transition-opacity pointer-events-none"
-                        style={{ left: `calc(${progress}% - 6px)` }}
-                      />
+                      <div className="flex justify-between text-xs font-bold text-gray-400 px-1 font-mono">
+                        <span>{formatTime(currentTime)}</span>
+                        <span>{formatTime(duration)}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-[10px] sm:text-[11px] font-bold text-gray-400">
-                      <span>{formatTime(currentTime)}</span>
-                      <span>{formatTime(duration)}</span>
-                    </div>
-                  </div>
-                    {/* Playback Controls Row */}
-                  <div className="flex items-center justify-between md:justify-center md:gap-12 flex-shrink-0">
-                    <button 
-                      onClick={toggleShuffle}
-                      className={`p-2 transition-colors ${isShuffle ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
-                    >
-                      <Shuffle className="w-5 h-5 xs:w-6 xs:h-6 md:w-7 md:h-7" />
-                    </button>
-                    <button onClick={prevTrack} className="p-2 text-white hover:text-primary transition-colors transform active:scale-90">
-                      <SkipBack className="w-7 h-7 xs:w-8 xs:h-8 md:w-12 md:h-12" fill="currentColor" />
-                    </button>
-                    <button 
-                      onClick={togglePlay}
-                      className="w-12 h-12 xs:w-16 xs:h-16 md:w-24 md:h-24 rounded-full bg-white flex items-center justify-center text-black shadow-2xl hover:scale-105 active:scale-95 transition-all flex-shrink-0"
-                    >
-                      {isPlaying ? <Pause className="w-5 h-5 xs:w-7 xs:h-7 md:w-11 md:h-11" fill="currentColor" /> : <Play className="w-5 h-5 xs:w-7 xs:h-7 md:w-11 md:h-11 ml-0.5 xs:ml-1" fill="currentColor" />}
-                    </button>
-                    <button onClick={nextTrack} className="p-2 text-white hover:text-primary transition-colors transform active:scale-90">
-                      <SkipForward className="w-7 h-7 xs:w-8 xs:h-8 md:w-12 md:h-12" fill="currentColor" />
-                    </button>
-                    <button 
-                      onClick={toggleRepeat}
-                      className={`p-2 transition-colors ${repeatMode !== 'none' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
-                    >
-                      {repeatMode === 'one' ? <Repeat1 className="w-5 h-5 xs:w-6 xs:h-6 md:w-7 md:h-7" /> : <Repeat className="w-5 h-5 xs:w-6 xs:h-6 md:w-7 md:h-7" />}
-                    </button>
-                  </div>
-    
-                  {/* Action Footer Button Row */}
-                  <div className="flex items-center justify-between pt-1.5 xs:pt-2.5 border-t border-white/5 w-full flex-shrink-0">
-                    <button 
-                       onClick={() => toggleLike(currentTrack)}
-                       className={`flex items-center gap-1.5 px-3 py-1.5 xs:py-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors ${isLiked ? 'text-primary' : 'text-gray-400'}`}
-                     >
-                      <Heart className="w-4 h-4 xs:w-5 h-5" fill={isLiked ? "currentColor" : "none"} />
-                      <span className="font-bold text-xs text-white">{t('save_liked')}</span>
-                    </button>
-                    <div className="flex items-center gap-1.5">
+
+                    <div className="flex items-center justify-between px-2">
                       <button 
-                        onClick={() => showLyrics ? setShowLyrics(false) : fetchLyrics()}
-                        className={`p-2 xs:p-3 rounded-full transition-colors ${showLyrics ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white'}`}
-                        title="Lyrics"
+                        onClick={() => toggleLike(currentTrack)}
+                        className={`p-2 transition-colors ${isLiked ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
                       >
-                        <Music2 className="w-4 h-4 xs:w-5 xs:h-5" />
+                        <Heart className="w-5.5 h-5.5" fill={isLiked ? "currentColor" : "none"} />
                       </button>
+                      
+                      <div className="flex items-center gap-6 sm:gap-9">
+                        <button onClick={prevTrack} className="p-2 text-white hover:text-primary transition-colors transform active:scale-90">
+                          <SkipBack className="w-6.5 h-6.5" fill="currentColor" />
+                        </button>
+                        <button 
+                          onClick={togglePlay}
+                          className="w-13 h-13 rounded-full bg-white flex items-center justify-center text-black shadow-xl hover:scale-105 active:scale-95 transition-all"
+                        >
+                          {isPlaying ? <Pause className="w-5.5 h-5.5" fill="currentColor" /> : <Play className="w-5.5 h-5.5 ml-0.5" fill="currentColor" />}
+                        </button>
+                        <button onClick={nextTrack} className="p-2 text-white hover:text-primary transition-colors transform active:scale-90">
+                          <SkipForward className="w-6.5 h-6.5" fill="currentColor" />
+                        </button>
+                      </div>
+
                       <button 
-                        onClick={() => shareTrack(currentTrack)}
-                        className="p-2 xs:p-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+                        onClick={() => setShowLyrics(false)}
+                        className="p-2 rounded-full bg-primary text-black shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+                        title="Show vinyl cover"
                       >
-                        <Share2 className="w-4 h-4 xs:w-5 xs:h-5" />
+                        <Music2 className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
-                </div>
-              </div>
+                </>
+              ) : (
+                /* ----------------- STANDARD MODE ----------------- */
+                <>
+                  <header className="flex justify-between items-center mb-2 xs:mb-4 md:mb-6 lg:mb-12 flex-shrink-0">
+                    <button 
+                      onClick={() => setIsExpanded(false)}
+                      className="w-10 h-10 xs:w-12 xs:h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                    >
+                      <ChevronDown size={24} />
+                    </button>
+                    <div className="text-center">
+                      <p className="text-[9px] uppercase tracking-[0.2em] text-gray-400 font-bold mb-0.5">Playing from</p>
+                      <p className="font-bold text-xs xs:text-sm">{t('now_playing')}</p>
+                    </div>
+                    <button className="w-10 h-10 xs:w-12 xs:h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                      <MoreHorizontal size={20} />
+                    </button>
+                  </header>
+                  <div className="flex-1 flex flex-col md:flex-row items-center justify-between md:justify-center gap-4 sm:gap-8 md:gap-12 lg:gap-24 overflow-hidden py-3 xs:py-5 sm:py-6 w-full">
+                    {/* Album Art Section or Vinyl */}
+                    <AnimatePresence mode="wait">
+                      <motion.div 
+                        key="album-art"
+                        layoutId="player-art"
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.9, opacity: 0 }}
+                        className="w-auto h-[25vh] min-h-[140px] max-h-[240px] xs:h-[28vh] xs:max-h-[295px] md:w-full md:h-auto md:max-w-[330px] lg:max-w-[400px] xl:max-w-[420px] aspect-square flex-shrink-0 relative group flex items-center justify-center mx-auto"
+                      >
+                        <RotatingVinyl isPlaying={isPlaying} thumbnail={currentTrack.thumbnail} />
+                      </motion.div>
+                    </AnimatePresence>
+       
+                    {/* Control Center Section */}
+                    <div className="w-full max-w-[450px] flex flex-col justify-between flex-grow flex-1 md:justify-center md:gap-6 lg:gap-8 overflow-hidden md:overflow-visible py-2 xs:py-4">
+                      <div className="space-y-1 text-center md:text-left select-none flex-shrink-0">
+                        <motion.h1 
+                          initial={{ y: 20, opacity: 0 }}
+                          animate={{ y: 0, opacity: 1 }}
+                          className="text-lg xs:text-2xl md:text-4xl lg:text-5xl font-black tracking-tight line-clamp-1 md:line-clamp-2"
+                        >
+                          {currentTrack.title}
+                        </motion.h1>
+                        <div className="flex flex-col items-center md:items-start select-none">
+                          <motion.p 
+                            initial={{ y: 20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ delay: 0.1 }}
+                            className="text-xs xs:text-sm md:text-xl text-primary font-bold truncate max-w-full"
+                          >
+                            {currentTrack.artist}
+                          </motion.p>
+                          <button 
+                            onClick={() => toggleFollowArtist({
+                              id: '',
+                              name: currentTrack.artist,
+                              thumbnail: currentTrack.thumbnail
+                            })}
+                            className={`mt-1 flex items-center gap-1.5 px-3 py-1 rounded-full border text-[9px] xs:text-[10px] font-bold transition-all ${
+                              followedArtists.some(a => a.name === currentTrack.artist)
+                                ? 'bg-primary border-primary text-black' 
+                                : 'bg-transparent border-white/20 text-white hover:border-white'
+                            }`}
+                          >
+                            {followedArtists.some(a => a.name === currentTrack.artist) ? (
+                              <><UserCheck size={11} /> {t('following')}</>
+                            ) : (
+                              <><UserPlus size={11} /> {t('follow_artist')}</>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+     
+                      {/* Waveform Visualizer */}
+                      <div className="w-full h-8 xs:h-11 md:h-12 bg-surface/30 border border-outline/20 rounded-2xl p-1 xs:p-2 backdrop-blur-md flex items-center justify-center relative overflow-hidden flex-shrink-0">
+                        <WaveformVisualizer isPlaying={isPlaying} color="#00df82" height={26} />
+                      </div>
+       
+                      {/* Progress Section */}
+                      <div className="w-full space-y-1.5 flex-shrink-0">
+                        <div className="relative group/progress h-2 flex items-center">
+                          <input 
+                            type="range"
+                            min="0"
+                            max={duration || 100}
+                            step="1"
+                            value={currentTime || 0}
+                            onChange={(e) => seekTo(parseFloat(e.target.value))}
+                            className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
+                          />
+                          <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-white group-hover/progress:bg-primary transition-colors" 
+                              style={{ width: `${progress}%` }} 
+                            />
+                          </div>
+                          <div 
+                            className="absolute w-3 h-3 bg-white rounded-full opacity-0 group-hover/progress:opacity-100 shadow-xl transition-opacity pointer-events-none"
+                            style={{ left: `calc(${progress}% - 6px)` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[10px] sm:text-[11px] font-bold text-gray-400">
+                          <span>{formatTime(currentTime)}</span>
+                          <span>{formatTime(duration)}</span>
+                        </div>
+                      </div>
+                        {/* Playback Controls Row */}
+                      <div className="flex items-center justify-between md:justify-center md:gap-12 flex-shrink-0">
+                        <button 
+                          onClick={toggleShuffle}
+                          className={`p-2 transition-colors ${isShuffle ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
+                        >
+                          <Shuffle className="w-5 h-5 xs:w-6 xs:h-6 md:w-7 md:h-7" />
+                        </button>
+                        <button onClick={prevTrack} className="p-2 text-white hover:text-primary transition-colors transform active:scale-90">
+                          <SkipBack className="w-7 h-7 xs:w-8 xs:h-8 md:w-12 md:h-12" fill="currentColor" />
+                        </button>
+                        <button 
+                          onClick={togglePlay}
+                          className="w-12 h-12 xs:w-16 xs:h-16 md:w-24 md:h-24 rounded-full bg-white flex items-center justify-center text-black shadow-2xl hover:scale-105 active:scale-95 transition-all flex-shrink-0"
+                        >
+                          {isPlaying ? <Pause className="w-5 h-5 xs:w-7 xs:h-7 md:w-11 md:h-11" fill="currentColor" /> : <Play className="w-5 h-5 xs:w-7 xs:h-7 md:w-11 md:h-11 ml-0.5 xs:ml-1" fill="currentColor" />}
+                        </button>
+                        <button onClick={nextTrack} className="p-2 text-white hover:text-primary transition-colors transform active:scale-90">
+                          <SkipForward className="w-7 h-7 xs:w-8 xs:h-8 md:w-12 md:h-12" fill="currentColor" />
+                        </button>
+                        <button 
+                          onClick={toggleRepeat}
+                          className={`p-2 transition-colors ${repeatMode !== 'none' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
+                        >
+                          {repeatMode === 'one' ? <Repeat1 className="w-5 h-5 xs:w-6 xs:h-6 md:w-7 md:h-7" /> : <Repeat className="w-5 h-5 xs:w-6 xs:h-6 md:w-7 md:h-7" />}
+                        </button>
+                      </div>
+        
+                      {/* Action Footer Button Row */}
+                      <div className="flex items-center justify-between pt-1.5 xs:pt-2.5 border-t border-white/5 w-full flex-shrink-0">
+                        <button 
+                           onClick={() => toggleLike(currentTrack)}
+                           className={`flex items-center gap-1.5 px-3 py-1.5 xs:py-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors ${isLiked ? 'text-primary' : 'text-gray-400'}`}
+                         >
+                          <Heart className="w-4 h-4 xs:w-5 h-5" fill={isLiked ? "currentColor" : "none"} />
+                          <span className="font-bold text-xs text-white">{t('save_liked')}</span>
+                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button 
+                            onClick={() => showLyrics ? setShowLyrics(false) : fetchLyrics()}
+                            className={`p-2 xs:p-3 rounded-full transition-colors ${showLyrics ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white'}`}
+                            title="Lyrics"
+                          >
+                            <Music2 className="w-4 h-4 xs:w-5 xs:h-5" />
+                          </button>
+                          <button 
+                            onClick={() => shareTrack(currentTrack)}
+                            className="p-2 xs:p-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+                          >
+                            <Share2 className="w-4 h-4 xs:w-5 xs:h-5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </motion.div>
         )}
@@ -1640,15 +1881,15 @@ function AppContent() {
               {/* Grid of sub tab links */}
               <div className="space-y-4">
                 <span className="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-widest block leading-none">Navegar Secciones:</span>
-                <div className="grid grid-cols-2 xs:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <div 
-                    onClick={() => { setActiveTab('chat'); setShowMoreMenu(false); }}
+                    onClick={() => { setActiveTab('social'); setShowMoreMenu(false); }}
                     className={`p-3.5 rounded-2xl border text-center flex flex-col items-center gap-1.5 cursor-pointer transition-all ${
-                      activeTab === 'chat' ? 'bg-primary/10 border-primary text-primary' : 'bg-black/35 border-white/5 text-gray-400 hover:text-white'
+                      activeTab === 'social' ? 'bg-primary/10 border-primary text-primary' : 'bg-black/35 border-white/5 text-gray-400 hover:text-white'
                     }`}
                   >
-                    <MessageSquare size={18} />
-                    <span className="text-[9.5px] font-black uppercase tracking-wider">Mensajes</span>
+                    <Heart size={18} />
+                    <span className="text-[9.5px] font-black uppercase tracking-wider">Social</span>
                   </div>
 
                   <div 
@@ -1667,23 +1908,23 @@ function AppContent() {
                       activeTab === 'library' ? 'bg-primary/10 border-primary text-primary' : 'bg-black/35 border-white/5 text-gray-400 hover:text-white'
                     }`}
                   >
-                    <User size={18} />
-                    <span className="text-[9.5px] font-black uppercase tracking-wider">Mi Perfil</span>
+                    <Library size={18} />
+                    <span className="text-[9.5px] font-black uppercase tracking-wider">{language === 'es' ? 'Colección' : 'Collection'}</span>
                   </div>
 
                   <div 
-                    onClick={() => { setActiveTab('rooms'); setShowMoreMenu(false); }}
+                    onClick={() => { setActiveTab('profile'); setShowMoreMenu(false); }}
                     className={`p-3.5 rounded-2xl border text-center flex flex-col items-center gap-1.5 cursor-pointer transition-all ${
-                      activeTab === 'rooms' ? 'bg-primary/10 border-primary text-primary' : 'bg-black/35 border-white/5 text-gray-400 hover:text-white'
+                      activeTab === 'profile' ? 'bg-primary/10 border-primary text-primary' : 'bg-black/35 border-white/5 text-gray-400 hover:text-white'
                     }`}
                   >
-                    <Radio size={18} className={activeTab === 'rooms' ? 'animate-pulse' : ''} />
-                    <span className="text-[9.5px] font-black uppercase tracking-wider">Salas Live</span>
+                    <User size={18} />
+                    <span className="text-[9.5px] font-black uppercase tracking-wider">{language === 'es' ? 'Mi Perfil' : 'My Profile'}</span>
                   </div>
 
                   <div 
                     onClick={() => { setActiveTab('editor'); setShowMoreMenu(false); }}
-                    className={`p-3.5 rounded-2xl border text-center flex flex-col items-center gap-1.5 cursor-pointer transition-all ${
+                    className={`p-3.5 rounded-2xl border text-center flex flex-col items-center gap-1.5 cursor-pointer transition-all col-span-2 ${
                       activeTab === 'editor' ? 'bg-primary/10 border-primary text-primary' : 'bg-black/35 border-white/5 text-gray-400 hover:text-white'
                     }`}
                   >
@@ -1759,12 +2000,12 @@ function SidebarNavButton({ active, onClick, icon, label }: { active: boolean, o
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-5 w-full py-2 group transition-all ${active ? 'text-white' : 'text-gray-400 hover:text-white'}`}
+      className={`flex items-center gap-3 w-full py-1.5 px-3 rounded-xl transition-all ${active ? 'bg-primary/10 text-primary' : 'text-gray-400 hover:text-white hover:bg-white/[0.03]'}`}
     >
-      <div className={`${active ? 'text-primary' : 'text-gray-400 group-hover:text-white'} transition-colors`}>
+      <div className={`${active ? 'text-primary' : 'text-gray-400 group-hover:text-white'} transition-colors flex-shrink-0`}>
         {icon}
       </div>
-      <span className="font-bold text-lg">{label}</span>
+      <span className="font-bold text-[13.5px] truncate">{label}</span>
     </button>
   );
 }
@@ -1773,12 +2014,12 @@ function NavButton({ active, onClick, icon, label }: { active: boolean, onClick:
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center gap-1.5 flex-1 py-1 transition-all ${active ? 'text-primary' : 'text-onSurfaceVariant/60'}`}
+      className={`flex flex-col items-center gap-0.5 flex-1 py-0.5 transition-all ${active ? 'text-primary' : 'text-onSurfaceVariant/60'}`}
     >
-      <div className={`px-6 py-1.5 rounded-2xl transition-all duration-300 ${active ? 'bg-primary/15' : 'hover:bg-surfaceVariant/50'}`}>
+      <div className={`px-2 py-0.5 rounded-xl transition-all duration-300 ${active ? 'bg-primary/15' : 'hover:bg-surfaceVariant/50'}`}>
         {icon}
       </div>
-      <span className={`text-[10px] font-black tracking-widest uppercase transition-all ${active ? 'opacity-100' : 'opacity-40'}`}>
+      <span className={`text-[8px] font-black tracking-wider uppercase transition-all ${active ? 'opacity-100' : 'opacity-40'}`}>
         {label}
       </span>
     </button>

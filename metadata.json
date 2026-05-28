@@ -1,6 +1,6 @@
 {
-  "name": "VibeSonic",
-  "description": "Modern music player focused on background playback using official YouTube APIs, with a sleek Material 3 interface.",
+  "name": "PureAudio",
+  "description": "PureAudio - A premium social music platform with a sleek vertical feed, real-time chats, playlist manager, and video creation.",
   "requestFramePermissions": [],
   "majorCapabilities": ["AUDIO_PLAYBACK", "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

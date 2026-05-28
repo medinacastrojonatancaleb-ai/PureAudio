@@ -25,6 +25,28 @@ function setCache(key: string, data: any) {
 function isPlaylistOrCompilation(title: string, duration?: string, seconds?: number): boolean {
   const lowerTitle = title.toLowerCase();
   
+  const badKeywords = [
+    "karaoke", "instrumental", "backing track", "backingtrack", "tutorial", 
+    "como tocar", "cómo tocar", "how to play", "guitar tutorial", "piano tutorial", 
+    "drum tutorial", "vocal guide", "pista para cantar", "pista lirical", 
+    "parody", "parodia", "drum cover", "guitar cover", "bass cover", "fingerstyle"
+  ];
+
+  if (badKeywords.some(keyword => lowerTitle.includes(keyword))) {
+    return true;
+  }
+
+  // Safe checks for cover versions to avoid filtering words like 'recovers' or 'discover'
+  if (
+    lowerTitle.includes("cover ") ||
+    lowerTitle.includes(" cover") ||
+    lowerTitle.includes("(cover") ||
+    lowerTitle.includes("[cover") ||
+    lowerTitle.includes("cover of")
+  ) {
+    return true;
+  }
+
   const playlistKeywords = [
     "mix", "playlist", "compilación", "compilacion", "compilation", 
     "completo", "full album", "album completo", "álbum completo", 

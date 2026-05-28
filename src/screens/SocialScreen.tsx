@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Heart, MessageCircle, Share2, Music, Tag, Image, Send, Plus, 
-  Flame, Award, X, Check, Volume2, Sparkles, Search, Compass, LogIn
+  Flame, Award, X, Check, Volume2, Sparkles, Search, Compass, LogIn,
+  Video, Film, Trash2, Camera
 } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext';
 import { youtubeService } from '../services/youtubeService';
@@ -60,7 +61,19 @@ export default function SocialScreen() {
   // Post composer state
   const [newPostText, setNewPostText] = useState('');
   const [attachedImage, setAttachedImage] = useState('');
-  const [composerOption, setComposerOption] = useState<'status' | 'photo' | 'song'>('status');
+  const [attachedVideo, setAttachedVideo] = useState('');
+  const [attachedVideoName, setAttachedVideoName] = useState('');
+  const [composerOption, setComposerOption] = useState<'status' | 'photo' | 'song' | 'video'>('status');
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAttachedVideoName(file.name);
+      const url = URL.createObjectURL(file);
+      setAttachedVideo(url);
+    }
+  };
 
   // Story Creator Modal state
   const [showStoryModal, setShowStoryModal] = useState(false);
@@ -71,7 +84,18 @@ export default function SocialScreen() {
   const [searchSongQuery, setSearchSongQuery] = useState('');
   const [searchSongResults, setSearchSongResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
-  const [selectedMusic, setSelectedMusic] = useState<any>(null);
+  const [selectedMusic, setSelectedMusic] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('pureaudio_social_selected_music');
+      if (saved) {
+        localStorage.removeItem('pureaudio_social_selected_music');
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn("Could not parse social selected music:", e);
+    }
+    return null;
+  });
 
   const handleSearchSong = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -100,12 +124,15 @@ export default function SocialScreen() {
         title: selectedMusic.title,
         artist: selectedMusic.artist,
         thumbnail: selectedMusic.thumbnail
-      } : undefined
+      } : undefined,
+      attachedVideo || undefined
     );
 
     // Reset composer state
     setNewPostText('');
     setAttachedImage('');
+    setAttachedVideo('');
+    setAttachedVideoName('');
     setSelectedMusic(null);
     setSearchSongQuery('');
     setSearchSongResults([]);
@@ -302,7 +329,7 @@ export default function SocialScreen() {
           </div>
 
           {/* Attached items indicators preview */}
-          {(selectedMusic || attachedImage) && (
+          {(selectedMusic || attachedImage || attachedVideo) && (
             <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
               {selectedMusic && (
                 <div className="bg-primary/10 text-primary text-[10px] font-black font-mono border border-primary/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
@@ -318,23 +345,34 @@ export default function SocialScreen() {
                   <button type="button" onClick={() => setAttachedImage('')} className="hover:text-white">✕</button>
                 </div>
               )}
+              {attachedVideo && (
+                <div className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black font-mono border border-emerald-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5 animate-pulse">
+                  <Video size={11} />
+                  <span>Video: {attachedVideoName || 'Clip'}</span>
+                  <button type="button" onClick={() => { setAttachedVideo(''); setAttachedVideoName(''); }} className="hover:text-white">✕</button>
+                </div>
+              )}
             </div>
           )}
 
           {/* Actions toolbar row */}
           <div className="flex items-center justify-between pt-3 border-t border-white/5">
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               
               {/* Attach Music */}
               <button 
                 type="button"
+                id="btn-add-music-composer"
                 onClick={() => setComposerOption(composerOption === 'song' ? 'status' : 'song')}
-                className={`p-2.5 rounded-xl border transition-all ${
-                  composerOption === 'song' ? 'bg-primary/10 border-primary text-primary' : 'bg-black/30 border-white/5 text-gray-400 hover:text-white'
+                className={`px-4 py-2 border rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all ${
+                  composerOption === 'song' 
+                    ? 'bg-primary text-black border-primary shadow-lg shadow-primary/25' 
+                    : 'bg-primary/15 border-primary/30 text-primary hover:bg-primary/25'
                 }`}
-                title="Search Global Music to Attach"
+                title={language === 'es' ? 'Agregar música' : 'Add Music'}
               >
-                <Music size={15} />
+                <Music size={13} className={composerOption === 'song' ? 'text-black' : 'text-primary animate-pulse'} />
+                <span>{language === 'es' ? 'Agregar música' : 'Add Music'}</span>
               </button>
 
               {/* Attach Preset Image */}
@@ -351,17 +389,68 @@ export default function SocialScreen() {
               >
                 <Image size={15} />
               </button>
+
+              {/* Upload or Record Video from cell phone */}
+              <input 
+                type="file" 
+                accept="video/*" 
+                ref={videoInputRef} 
+                onChange={handleVideoFileChange} 
+                className="hidden" 
+              />
+              <button 
+                type="button"
+                onClick={() => {
+                  setComposerOption('video');
+                  videoInputRef.current?.click();
+                }}
+                className={`p-2.5 rounded-xl border transition-all ${
+                  attachedVideo ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'bg-black/30 border-white/5 text-gray-400 hover:text-white'
+                }`}
+                title={language === 'es' ? 'Subir o Grabar Video' : 'Upload or Record Video'}
+              >
+                <Video size={15} />
+              </button>
             </div>
 
             <button 
               type="submit"
-              disabled={!newPostText.trim()}
+              disabled={!newPostText.trim() && !attachedVideo}
               className="px-5 py-2 bg-white hover:bg-primary disabled:opacity-40 disabled:hover:bg-white text-black text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-lg flex items-center gap-1.5 active:scale-95"
             >
               <Send size={12} />
               <span>{language === 'es' ? 'Publicar al Feed' : 'Share to Feed'}</span>
             </button>
           </div>
+
+          {/* Sub composer: REAL video file preview! */}
+          {composerOption === 'video' && attachedVideo && (
+            <div className="bg-black/40 p-4 rounded-2xl border border-white/5 space-y-3 animate-fade-in text-center">
+              <span className="block text-[8px] font-mono font-black text-emerald-400 uppercase tracking-widest text-left">
+                {language === 'es' ? 'VISTA PREVIA DEL VIDEO TIKTOK' : 'TIKTOK VIDEO PREVIEW'}
+              </span>
+              <div className="relative aspect-[9/16] h-64 mx-auto rounded-xl overflow-hidden border border-white/10 shadow-lg bg-black">
+                <video 
+                  src={attachedVideo} 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline 
+                  className="w-full h-full object-cover" 
+                />
+                <button 
+                  type="button" 
+                  onClick={() => { setAttachedVideo(''); setAttachedVideoName(''); }}
+                  className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full hover:bg-red-600 shadow transition-colors"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-400 font-mono">
+                {attachedVideoName}
+              </p>
+            </div>
+          )}
 
           {/* Sub composer: REAL youtube engine search box! */}
           {composerOption === 'song' && (
@@ -397,7 +486,7 @@ export default function SocialScreen() {
                 </div>
               )}
 
-              <div className="max-h-48 overflow-y-auto space-y-1.5 scrollbar-hide">
+              <div className="max-h-56 overflow-y-auto space-y-1.5 scrollbar-hide">
                 {searchSongResults.map((song, idx) => (
                   <div 
                     key={idx}
@@ -405,16 +494,36 @@ export default function SocialScreen() {
                       setSelectedMusic(song);
                       setComposerOption('status');
                     }}
-                    className="p-2 rounded-xl hover:bg-white/5 cursor-pointer flex items-center justify-between gap-3 transition-colors border border-transparent hover:border-white/5"
+                    className="p-2 rounded-xl bg-white/[0.01] hover:bg-white/5 cursor-pointer flex items-center justify-between gap-3 transition-colors border border-white/5 hover:border-white/10"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <img src={song.thumbnail} alt="" className="w-8 h-8 rounded object-cover shadow" referrerPolicy="no-referrer" />
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="relative group/thumb w-8 h-8 rounded overflow-hidden flex-shrink-0">
+                        <img src={song.thumbnail} alt="" className="w-full h-full object-cover shadow" referrerPolicy="no-referrer" />
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-100 group-hover/thumb:scale-105 transition-all">
+                          <Play size={10} className="text-primary fill-primary" />
+                        </div>
+                      </div>
                       <div className="min-w-0">
-                        <h6 className="font-bold text-white text-[11px] leading-tight truncate">{song.title}</h6>
-                        <p className="text-[9px] text-gray-500 leading-none mt-0.5 truncate">{song.artist}</p>
+                        <h6 className="font-bold text-white text-[11.5px] leading-tight truncate">{song.title}</h6>
+                        <p className="text-[9.5px] text-gray-400 leading-none mt-0.5 truncate">{song.artist}</p>
                       </div>
                     </div>
-                    <span className="text-[8px] font-mono font-bold bg-[#00df82]/10 text-[#00df82] px-2 py-0.5 rounded uppercase">ATTACH</span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        type="button"
+                        id={`btn-listen-prev-${idx}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          playTrack(song);
+                        }}
+                        className="px-2 py-1 text-[9px] font-black uppercase tracking-wider bg-white/10 hover:bg-white/20 text-gray-300 rounded border border-white/5 transition-all active:scale-95"
+                      >
+                        {language === 'es' ? 'Escuchar' : 'Listen'}
+                      </button>
+                      <span className="text-[9px] font-mono font-black bg-[#00df82]/15 text-[#00df82] px-2.5 py-1 rounded-md uppercase border border-[#00df82]/20">
+                        ATTACH
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -453,6 +562,18 @@ export default function SocialScreen() {
             {post.image && (
               <div className="rounded-2xl overflow-hidden border border-white/5 aspect-video w-full relative shadow-md">
                 <img src={post.image} alt="" className="w-full h-full object-cover" />
+              </div>
+            )}
+
+            {/* Optional post attached video */}
+            {post.videoUrl && (
+              <div className="rounded-2xl overflow-hidden border border-white/5 aspect-video w-full relative shadow-md bg-black">
+                <video 
+                  src={post.videoUrl} 
+                  controls 
+                  playsInline 
+                  className="w-full h-full object-contain" 
+                />
               </div>
             )}
 
@@ -602,10 +723,23 @@ export default function SocialScreen() {
                           <div 
                             key={idx}
                             onClick={() => setSelectedMusic(s)}
-                            className="p-1 px-2 rounded-lg hover:bg-white/5 cursor-pointer text-[10px] text-white flex justify-between items-center"
+                            className="p-1.5 px-2 rounded-lg hover:bg-white/5 cursor-pointer text-[10px] text-white flex justify-between items-center gap-2"
                           >
-                            <span className="truncate max-w-[200px]">{s.title} • {s.artist}</span>
-                            <span className="text-[8px] font-mono text-[#00df82] uppercase">PICK</span>
+                            <span className="truncate max-w-[160px]">{s.title} • {s.artist}</span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                id={`btn-story-preview-${idx}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  playTrack(s);
+                                }}
+                                className="px-1.5 py-0.5 bg-white/10 hover:bg-white/20 text-white rounded text-[8px] font-mono"
+                              >
+                                {language === 'es' ? 'Escuchar' : 'Listen'}
+                              </button>
+                              <span className="text-[8px] font-mono text-[#00df82] uppercase font-bold">PICK</span>
+                            </div>
                           </div>
                         ))}
                       </div>

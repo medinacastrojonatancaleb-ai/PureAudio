@@ -197,9 +197,7 @@ export default function YouTubePlayer({
   }
 
   return (
-    <div className={`fixed bottom-4 right-4 w-16 h-16 overflow-hidden z-[100] border border-white/10 rounded-xl bg-black transition-all duration-300 ${
-      isHidden ? 'opacity-0 scale-0 pointer-events-none' : 'opacity-100 scale-100 shadow-[0_4px_20px_rgba(0,0,0,0.5)]'
-    }`}>
+    <div className="fixed bottom-0 right-0 w-[1px] h-[1px] opacity-0 pointer-events-none z-[-99] overflow-hidden">
       <YouTube 
         videoId={videoId} 
         opts={opts} 
@@ -207,9 +205,6 @@ export default function YouTubePlayer({
         onStateChange={onPlayerStateChange}
         onError={onPlayerError}
       />
-      <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
-        <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-      </div>
     </div>
   );
 }

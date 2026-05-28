@@ -95,9 +95,10 @@ interface PlayerContextType {
   registerFallback: (originalId: string, fallbackTrack: YouTubeTrack) => void;
   posts: any[];
   stories: any[];
-  addPost: (text: string, image?: string, music?: { id: string; title: string; artist: string; thumbnail: string }) => void;
+  addPost: (text: string, image?: string, music?: { id: string; title: string; artist: string; thumbnail: string }, videoUrl?: string) => void;
   addStory: (image: string, music?: { id: string; title: string; artist: string; thumbnail: string }) => void;
   likePostInContext: (postId: string) => void;
+  stopTrack: () => void;
 }
 
 const translations = {
@@ -344,7 +345,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => setNotification(null), 3000);
   }, []);
 
-  const addPost = useCallback((text: string, image?: string, music?: { id: string; title: string; artist: string; thumbnail: string }) => {
+  const stopTrack = useCallback(() => {
+    setIsPlaying(false);
+    setCurrentTrack(null);
+  }, []);
+
+  const addPost = useCallback((text: string, image?: string, music?: { id: string; title: string; artist: string; thumbnail: string }, videoUrl?: string) => {
     const userDisplayName = user?.displayName || 'Tú 🎧';
     const userPhotoURL = user?.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
     
@@ -355,7 +361,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       time: 'Just now',
       text,
       image,
-      music,
+      music: music || (videoUrl ? { id: 'vu_' + Date.now().toString(), title: text.split('\n')[0] || 'Mi Video TikTok 🎥', artist: userDisplayName, thumbnail: userPhotoURL } : undefined),
+      videoUrl,
       likes: 0,
       comments: 0,
       isLiked: false
@@ -823,7 +830,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       stories,
       addPost,
       addStory,
-      likePostInContext
+      likePostInContext,
+      stopTrack
     }}>
       {children}
     </PlayerContext.Provider>

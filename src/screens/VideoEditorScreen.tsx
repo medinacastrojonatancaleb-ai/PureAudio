@@ -40,7 +40,7 @@ const SUBTITLE_PRESETS: CaptionSnippet[] = [
 ];
 
 export default function VideoEditorScreen({ onClose }: { onClose?: () => void }) {
-  const { language, playTrack, currentTrack } = usePlayer();
+  const { language, addPost } = usePlayer();
   const [activeTab, setActiveTab] = useState<'trim' | 'filter' | 'music' | 'text'>('trim');
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackTime, setPlaybackTime] = useState(0);
@@ -748,6 +748,20 @@ export default function VideoEditorScreen({ onClose }: { onClose?: () => void })
                 <button
                   onClick={() => {
                     setIsExportDone(false);
+                    // Create real post containing the edited video loop alignment
+                    addPost(
+                      language === 'es' 
+                        ? `Afinando mi vibra con el filtro ${activeFilterObj.name}! 🚀🎙️ #cyberpunk #vibeViral`
+                        : `Fine-tuning my vibe with the ${activeFilterObj.name} filter! 🚀🎙️ #cyberpunk #vibeViral`,
+                      undefined,
+                      selectedBgTrack ? {
+                        id: selectedBgTrack.id,
+                        title: selectedBgTrack.title,
+                        artist: selectedBgTrack.artist,
+                        thumbnail: selectedBgTrack.thumbnail
+                      } : undefined,
+                      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4"
+                    );
                     if (onClose) onClose();
                   }}
                   className="flex-1 py-3 bg-primary text-black rounded-xl text-xs font-black uppercase text-center shadow-lg shadow-primary/20 cursor-pointer"
